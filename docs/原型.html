@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>行程板 · 旅行计划（交互原型 v1.0）</title>
+<!--
+  旅行计划安排 · 交互式原型（单文件，零依赖，可直接离线打开）
+  规则依据：《PRD.md》《口径文档.md》
+  - 周视图日程表（周一~周日 × 00:00-24:00，30 分钟刻度）
+  - 卡片：拖动改期 / 上下边缘调时长 / 点 × 取消（回库 + 预计日期回写）
+  - 日程库：按类型 / 地点 / 预计日期分组，拖入日程表，已放置置灰
+  - 数据存 localStorage；右上角可重置示例数据
+-->
+<style>
+  :root{
+    --bg:#f3f4f6; --panel:#ffffff; --line:#e5e7eb; --line-soft:#f1f2f5;
+    --t1:#111827; --t2:#374151; --t3:#6b7280; --t4:#9ca3af;
+    --gutter:60px; --slot:44px; /* 30 分钟一格 */
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0; background:var(--bg); color:var(--t1);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    font-size:14px; min-width:1180px; overflow:hidden;
+  }
+  body.noselect, body.noselect *{user-select:none;-webkit-user-select:none;}
+  body.resizing, body.resizing *{cursor:ns-resize !important;}
+
+  .app{display:flex;flex-direction:column;height:100vh;}
+
+  /* ============ 顶栏 ============ */
+  .topbar{
+    height:56px;flex:none;background:var(--panel);border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:14px;padding:0 16px;
+  }
+  .brand{font-size:17px;font-weight:700;display:flex;align-items:center;gap:8px;}
+  .brand .sub{font-size:12px;font-weight:400;color:var(--t4);}
+  .weeknav{display:flex;align-items:center;gap:8px;margin-left:8px;}
+  .btn{
+    border:1px solid var(--line);background:#fff;color:var(--t2);border-radius:8px;
+    padding:6px 12px;font-size:13px;cursor:pointer;line-height:1.2;
+  }
+  .btn:hover{background:#f9fafb;border-color:#d1d5db;}
+  .btn.primary{background:#2563eb;border-color:#2563eb;color:#fff;}
+  .btn.primary:hover{background:#1d4ed8;}
+  .btn.ghost-danger{color:#dc2626;}
+  #weekLabel{font-size:15px;font-weight:600;min-width:190px;text-align:center;}
+  .stats{font-size:13px;color:var(--t3);background:#f9fafb;border:1px solid var(--line);
+    border-radius:999px;padding:5px 14px;}
+  .stats b{color:var(--t1);}
+  .spacer{flex:1;}
+
+  /* ============ 主区 ============ */
+  .main{flex:1;display:flex;gap:12px;padding:12px;min-height:0;}
+
+  /* ---- 日程表面板 ---- */
+  .cal-panel{
+    flex:1;min-width:0;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;display:flex;flex-direction:column;overflow:hidden;
+  }
+  .cal-head{
+    flex:none;display:grid;grid-template-columns:var(--gutter) repeat(7,1fr);
+    border-bottom:1px solid var(--line);background:#fafbfc;
+  }
+  .cal-head .h-gutter{border-right:1px solid var(--line);}
+  .h-day{padding:8px 4px;text-align:center;border-right:1px solid var(--line-soft);}
+  .h-day:last-child{border-right:none;}
+  .h-day .dow{font-size:12px;color:var(--t3);}
+  .h-day .dnum{font-size:16px;font-weight:600;margin-top:1px;}
+  .h-day.today{background:rgba(37,99,235,.06);}
+  .h-day.today .dow{color:#2563eb;}
+  .h-day.today .dnum{color:#2563eb;}
+  .h-day .today-pill{
+    display:inline-block;font-size:10px;color:#fff;background:#2563eb;border-radius:999px;
+    padding:1px 7px;margin-left:5px;vertical-align:2px;
+  }
+  .cal-scroll{flex:1;overflow-y:auto;position:relative;}
+  .cal-inner{
+    position:relative;height:calc(48 * var(--slot));
+    background-image:
+      repeating-linear-gradient(to bottom, transparent 0 calc(2 * var(--slot) - 1px), #e2e5ea calc(2 * var(--slot) - 1px) calc(2 * var(--slot))),
+      repeating-linear-gradient(to bottom, transparent 0 calc(var(--slot) - 1px), var(--line-soft) calc(var(--slot) - 1px) var(--slot));
+  }
+  .cal-gutter{position:absolute;left:0;top:0;bottom:0;width:var(--gutter);border-right:1px solid var(--line);pointer-events:none;}
+  .cal-gutter .hr{
+    position:absolute;left:0;width:100%;text-align:right;padding-right:8px;
+    font-size:11px;color:var(--t4);transform:translateY(-6px);
+  }
+  .cal-days{position:absolute;left:var(--gutter);right:0;top:0;bottom:0;border-right:1px solid var(--line-soft);}
+  .day-col{position:absolute;top:0;bottom:0;border-right:1px solid var(--line-soft);}
+  .day-col.today{background:rgba(37,99,235,.035);}
+
+  /* ---- 日程卡片 ---- */
+  .card{
+    position:absolute;border-radius:6px;overflow:hidden;cursor:grab;
+    background:color-mix(in srgb, var(--c) 12%, #fff);
+    border:1px solid color-mix(in srgb, var(--c) 30%, #fff);
+    border-left:3px solid var(--c);
+    padding:3px 6px 3px 8px;box-shadow:0 1px 2px rgba(17,24,39,.06);
+  }
+  .card:hover{box-shadow:0 3px 10px rgba(17,24,39,.14);}
+  .card .c-title{font-size:12px;font-weight:600;color:var(--t1);line-height:1.25;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:14px;}
+  .card .c-time{font-size:11px;color:var(--t3);line-height:1.3;margin-top:1px;
+    overflow:hidden;white-space:nowrap;}
+  .card .c-meta{font-size:11px;color:var(--t3);line-height:1.3;margin-top:1px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .card .card-x{
+    position:absolute;top:2px;right:2px;width:16px;height:16px;border:none;border-radius:50%;
+    background:rgba(17,24,39,.06);color:var(--t3);font-size:12px;line-height:15px;cursor:pointer;
+    opacity:0;padding:0;text-align:center;
+  }
+  .card:hover .card-x{opacity:1;}
+  .card .card-x:hover{background:#fee2e2;color:#dc2626;}
+  .card.drag-src{opacity:.3;}
+  .card.resizing{box-shadow:0 0 0 2px var(--c);cursor:ns-resize;z-index:6;}
+
+  /* ---- 拖拽辅助 ---- */
+  #drop-hint{
+    position:absolute;display:none;border-radius:6px;pointer-events:none;z-index:5;
+    border:2px dashed var(--c);
+    background:color-mix(in srgb, var(--c) 10%, #fff);
+  }
+  .ghost{position:fixed;z-index:1000;pointer-events:none;opacity:.92;transform:rotate(1.2deg);
+    box-shadow:0 12px 28px rgba(17,24,39,.25);}
+  .ghost-mini{
+    position:fixed;z-index:1000;pointer-events:none;width:168px;
+    background:color-mix(in srgb, var(--c) 14%, #fff);
+    border:1px solid color-mix(in srgb, var(--c) 35%, #fff);
+    border-left:3px solid var(--c);border-radius:6px;padding:7px 9px;
+    font-size:12px;font-weight:600;color:var(--t1);
+    box-shadow:0 12px 28px rgba(17,24,39,.25);transform:rotate(1.2deg);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+
+  /* ---- 日程库 ---- */
+  .aside{
+    width:320px;flex:none;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;display:flex;flex-direction:column;overflow:hidden;
+  }
+  .aside-h{flex:none;display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px;}
+  .aside-h .t{font-size:15px;font-weight:700;}
+  .aside-h .t .sub{font-size:11px;font-weight:400;color:var(--t4);display:block;margin-top:1px;}
+  .lib-tabs{flex:none;display:flex;gap:4px;padding:0 14px 10px;border-bottom:1px solid var(--line);}
+  .lib-tabs button{
+    flex:1;border:1px solid var(--line);background:#fff;color:var(--t3);border-radius:8px;
+    padding:5px 0;font-size:12px;cursor:pointer;
+  }
+  .lib-tabs button.active{background:#eff6ff;border-color:#93c5fd;color:#1d4ed8;font-weight:600;}
+  #libList{flex:1;overflow-y:auto;padding:8px 10px 14px;}
+  .grp{margin-bottom:4px;}
+  .grp-h{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:8px;cursor:pointer;user-select:none;}
+  .grp-h:hover{background:#f9fafb;}
+  .grp-h .swatch{width:10px;height:10px;border-radius:3px;background:var(--c,#d1d5db);flex:none;}
+  .grp-h .grp-name{font-size:13px;font-weight:600;}
+  .grp-h .grp-cnt{font-size:11px;color:var(--t4);background:#f3f4f6;border-radius:999px;padding:1px 7px;}
+  .grp-h .chev{margin-left:auto;font-size:10px;color:var(--t4);transition:transform .15s;}
+  .grp.closed .chev{transform:rotate(-90deg);}
+  .grp.closed .grp-items{display:none;}
+  .grp.empty-op .grp-name{color:var(--t4);}
+  .grp-items{padding:2px 0 6px 10px;}
+  .grp-empty{font-size:12px;color:var(--t4);padding:6px 8px;}
+  .lib-item{
+    display:flex;gap:8px;align-items:flex-start;background:#fff;border:1px solid var(--line);
+    border-radius:8px;padding:7px 9px;margin-bottom:6px;cursor:grab;position:relative;
+  }
+  .lib-item:hover{border-color:#d1d5db;box-shadow:0 1px 4px rgba(17,24,39,.08);}
+  .lib-item .dot{width:9px;height:9px;border-radius:50%;background:var(--c);margin-top:5px;flex:none;}
+  .lib-item .lib-title{font-size:13px;font-weight:600;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .lib-item .lib-sub{font-size:11px;color:var(--t3);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .lib-item .lib-sub .none{color:var(--t4);}
+  .lib-item .lib-tag{
+    display:inline-block;font-size:10px;color:#6b7280;background:#f3f4f6;border-radius:4px;
+    padding:1px 6px;margin-top:3px;
+  }
+  .lib-item.placed{cursor:default;filter:grayscale(1);opacity:.55;}
+  .lib-item.placed:hover{border-color:var(--line);box-shadow:none;}
+  .lib-item.drag-src{opacity:.3;}
+
+  /* ============ 弹窗 ============ */
+  .overlay{
+    position:fixed;inset:0;background:rgba(17,24,39,.45);z-index:2000;
+    display:none;align-items:flex-start;justify-content:center;overflow-y:auto;padding:60px 0;
+  }
+  .overlay.show{display:flex;}
+  .modal{
+    background:#fff;border-radius:14px;width:480px;max-width:92vw;box-shadow:0 24px 60px rgba(17,24,39,.3);
+    animation:pop .16s ease-out;
+  }
+  @keyframes pop{from{transform:translateY(8px) scale(.98);opacity:0;}to{transform:none;opacity:1;}}
+  .modal-h{display:flex;align-items:center;justify-content:space-between;padding:16px 20px 0;}
+  .modal-h .t{font-size:16px;font-weight:700;}
+  .modal-x{border:none;background:none;font-size:20px;color:var(--t4);cursor:pointer;line-height:1;padding:4px;}
+  .modal-x:hover{color:var(--t2);}
+  .modal-b{padding:14px 20px 4px;max-height:64vh;overflow-y:auto;}
+  .f-row{margin-bottom:13px;}
+  .f-row label{display:block;font-size:12px;color:var(--t3);margin-bottom:5px;font-weight:600;}
+  .f-row label .req{color:#dc2626;margin-left:2px;}
+  .f-row label .hint-inline{font-weight:400;color:var(--t4);margin-left:6px;}
+  .f-row input[type=text],.f-row input[type=date],.f-row input[type=time],.f-row input[type=number],
+  .f-row select,.f-row textarea{
+    width:100%;border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:13px;
+    font-family:inherit;color:var(--t1);background:#fff;
+  }
+  .f-row input:focus,.f-row select:focus,.f-row textarea:focus{outline:none;border-color:#93c5fd;box-shadow:0 0 0 3px rgba(37,99,235,.12);}
+  .f-row textarea{resize:vertical;min-height:56px;}
+  .f-err{font-size:11px;color:#dc2626;margin-top:4px;display:none;}
+  .f-row.error input{border-color:#fca5a5;}
+  .f-row.error .f-err{display:block;}
+  .f-2col{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;}
+  .chip{
+    display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;
+    padding:5px 12px;font-size:12px;cursor:pointer;background:#fff;color:var(--t2);
+  }
+  .chip .cd{width:8px;height:8px;border-radius:50%;background:var(--c);}
+  .chip.active{border-color:var(--c);color:var(--t1);font-weight:600;
+    background:color-mix(in srgb, var(--c) 10%, #fff);}
+  .modal-f{display:flex;justify-content:flex-end;gap:10px;padding:12px 20px 18px;}
+
+  /* 确认气泡 */
+  .confirm-box{
+    background:#fff;border-radius:14px;width:400px;max-width:90vw;padding:20px 22px 18px;
+    box-shadow:0 24px 60px rgba(17,24,39,.3);animation:pop .16s ease-out;margin-top:12vh;
+  }
+  .confirm-box .ct{font-size:15px;font-weight:700;margin-bottom:8px;}
+  .confirm-box .cb{font-size:13px;color:var(--t3);line-height:1.65;}
+  .confirm-box .cf{display:flex;justify-content:flex-end;gap:10px;margin-top:16px;}
+  .btn.danger{background:#dc2626;border-color:#dc2626;color:#fff;}
+  .btn.danger:hover{background:#b91c1c;}
+
+  /* Toast */
+  #toast{
+    position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(16px);
+    background:#111827;color:#fff;font-size:13px;border-radius:999px;padding:9px 20px;
+    opacity:0;pointer-events:none;transition:all .2s;z-index:3000;box-shadow:0 8px 24px rgba(17,24,39,.3);
+  }
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  ::-webkit-scrollbar{width:10px;height:10px;}
+  ::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:6px;border:2px solid #fff;}
+  ::-webkit-scrollbar-thumb:hover{background:#9ca3af;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- 顶栏 -->
+  <div class="topbar">
+    <div class="brand">✈ 行程板 <span class="sub">旅行计划 · 交互原型 v1.0</span></div>
+    <div class="weeknav">
+      <button class="btn" id="prevWeek" title="上一周">◀</button>
+      <span id="weekLabel"></span>
+      <button class="btn" id="nextWeek" title="下一周">▶</button>
+      <button class="btn" id="todayBtn">今天</button>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="spacer"></div>
+    <button class="btn ghost-danger" id="resetBtn" title="清空本地修改，恢复示例数据">重置示例数据</button>
+  </div>
+
+  <div class="main">
+    <!-- 左：周视图日程表 -->
+    <div class="cal-panel">
+      <div class="cal-head" id="calHead"></div>
+      <div class="cal-scroll" id="calScroll">
+        <div class="cal-inner" id="calInner">
+          <div class="cal-gutter" id="calGutter"></div>
+          <div class="cal-days" id="calDays">
+            <div id="drop-hint"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右：日程库 -->
+    <div class="aside">
+      <div class="aside-h">
+        <div class="t">日程库<span class="sub">拖动日程到左侧日程表即可排期</span></div>
+        <button class="btn primary" id="newBtn">＋ 新建</button>
+      </div>
+      <div class="lib-tabs" id="libTabs">
+        <button data-g="type" class="active">按类型</button>
+        <button data-g="location">按地点</button>
+        <button data-g="expectedDate">按预计日期</button>
+      </div>
+      <div id="libList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 详情 / 新建弹窗 -->
+<div class="overlay" id="modalOverlay">
+  <form class="modal" id="modalForm" novalidate>
+    <div class="modal-h">
+      <div class="t" id="modalTitle">新建日程</div>
+      <button type="button" class="modal-x" id="modalClose" title="关闭">×</button>
+    </div>
+    <div class="modal-b">
+      <div class="f-row" id="rowTitle">
+        <label>事项名称<span class="req">*</span></label>
+        <input type="text" id="f-title" maxlength="30" placeholder="如：西湖游船">
+        <div class="f-err" id="errTitle"></div>
+      </div>
+      <div class="f-row">
+        <label>类型<span class="req">*</span></label>
+        <div class="chips" id="f-type-chips"></div>
+        <input type="hidden" id="f-type" value="sight">
+      </div>
+      <div class="f-row">
+        <label>地点</label>
+        <input type="text" id="f-loc" maxlength="30" placeholder="如：湖滨码头">
+      </div>
+      <div class="f-2col">
+        <div class="f-row">
+          <label>日期<span class="hint-inline">清空 = 移回日程库</span></label>
+          <input type="date" id="f-date">
+        </div>
+        <div class="f-row">
+          <label>开始时间<span class="hint-inline">30 分钟对齐</span></label>
+          <input type="time" id="f-time" step="1800">
+        </div>
+      </div>
+      <div class="f-2col">
+        <div class="f-row">
+          <label>时长</label>
+          <select id="f-dur"></select>
+        </div>
+        <div class="f-row">
+          <label>预估价格（元）</label>
+          <input type="number" id="f-price" min="0" step="0.01" placeholder="选填">
+        </div>
+      </div>
+      <div class="f-row">
+        <label>预计日期<span class="hint-inline">仅在详情中显示</span></label>
+        <input type="date" id="f-exp">
+      </div>
+      <div class="f-row">
+        <label>备注<span class="hint-inline">仅在详情中显示</span></label>
+        <textarea id="f-note" maxlength="200" placeholder="选填，如购票提示、注意事项"></textarea>
+      </div>
+    </div>
+    <div class="modal-f">
+      <button type="button" class="btn" id="modalCancel">取消</button>
+      <button type="submit" class="btn primary">保存</button>
+    </div>
+  </form>
+</div>
+
+<!-- 通用确认气泡 -->
+<div class="overlay" id="confirmOverlay">
+  <div class="confirm-box">
+    <div class="ct" id="confirmTitle"></div>
+    <div class="cb" id="confirmBody"></div>
+    <div class="cf">
+      <button class="btn" id="confirmNo">再想想</button>
+      <button class="btn" id="confirmYes">确认取消</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+/* ================= 常量与工具 ================= */
+const SLOT = 30, SLOT_H = 44, DAY_MIN = 1440, COLS = 7;
+const TYPES = [
+  {k:'transport', name:'交通', color:'#3B82F6'},
+  {k:'hotel',     name:'住宿', color:'#8B5CF6'},
+  {k:'food',      name:'餐饮', color:'#F59E0B'},
+  {k:'sight',     name:'景点', color:'#10B981'},
+  {k:'shopping',  name:'购物', color:'#EC4899'},
+  {k:'fun',       name:'娱乐', color:'#06B6D4'},
+];
+const TYPE_MAP = Object.fromEntries(TYPES.map(t=>[t.k,t]));
+const KEY = 'tp_schedules_v1', UI_KEY = 'tp_uistate_v1';
+const $ = s => document.querySelector(s);
+const esc = s => String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const clamp = (v,a,b) => Math.min(b, Math.max(a, v));
+const pad = n => String(n).padStart(2,'0');
+const isoOf = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parseISO = s => { const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); };
+const mondayOf = d => { const x=new Date(d); x.setHours(0,0,0,0); x.setDate(x.getDate()-((x.getDay()+6)%7)); return x; };
+const addDays = (d,n) => { const x=new Date(d); x.setDate(x.getDate()+n); return x; };
+const hhToMin = t => { const [h,m]=t.split(':').map(Number); return h*60+m; };
+const minToHH = m => `${pad(Math.floor(m/60))}:${pad(m%60)}`;
+const fmtShort = iso => iso ? `${+iso.slice(5,7)}/${+iso.slice(8,10)}` : '';
+const WEEK_CN = ['日','一','二','三','四','五','六'];
+const fmtMoney = n => n==null ? '' : '¥' + n.toLocaleString('zh-CN');
+const uid = () => 'sch_' + Date.now().toString(36) + Math.random().toString(36).slice(2,5);
+const byId = id => state.schedules.find(s=>s.id===id);
+const touch = s => s.updatedAt = Date.now();
+const yOfMin = m => m / SLOT * SLOT_H;         // 分钟 → 像素
+const snapY = y => Math.round(y / SLOT_H) * SLOT; // 像素 → 吸附后的分钟（四舍五入到 30 分钟）
+
+/* ================= 数据层 ================= */
+const state = {
+  schedules: [],
+  weekStart: mondayOf(new Date()),
+  groupBy: 'type',
+  collapsed: new Set(),
+};
+let editingId = null;
+
+function normalize(s){
+  return {
+    id: s.id || uid(),
+    title: s.title || '未命名日程',
+    type: TYPE_MAP[s.type] ? s.type : 'sight',
+    location: s.location || '',
+    date: s.date || null,
+    startTime: s.startTime || null,
+    durationMin: clamp(+s.durationMin || 60, 30, 1440),
+    expectedDate: s.expectedDate || null,
+    price: (s.price===0 || s.price) ? +s.price : null,
+    note: s.note || '',
+    createdAt: s.createdAt || Date.now(),
+    updatedAt: s.updatedAt || Date.now(),
+  };
+}
+function save(){
+  try{ localStorage.setItem(KEY, JSON.stringify(state.schedules)); }catch(e){ /* 存储不可用 → 内存模式 */ }
+}
+function load(){
+  try{
+    const raw = localStorage.getItem(KEY);
+    if(raw){ state.schedules = JSON.parse(raw).map(normalize); return; }
+  }catch(e){}
+  state.schedules = seedData(); save();
+}
+
+/* 示例数据：杭州 3 日游（相对当前周生成，周一为第 0 天） */
+function seedData(){
+  const mon = mondayOf(new Date());
+  const D = n => isoOf(addDays(mon, n));
+  let seq = 0;
+  const mk = o => normalize({createdAt: Date.now() + (seq++), updatedAt: Date.now() + (seq++), ...o});
+  return [
+    // 已放置（周三 D2 起）
+    mk({title:'高铁 G7549 · 虹桥→杭州东', type:'transport', location:'上海虹桥站', date:D(2), startTime:'08:30', durationMin:90, price:73, note:'提前 30 分钟到站，刷身份证进站。'}),
+    mk({title:'楼外楼午餐', type:'food', location:'孤山路店', date:D(2), startTime:'11:30', durationMin:90, price:180, note:'西湖醋鱼、龙井虾仁必点，建议提前取号。'}),
+    mk({title:'酒店办理入住', type:'hotel', location:'湖滨亚朵酒店', date:D(2), startTime:'13:30', durationMin:30, price:520, note:'大床房含双早，订单号 A20260826。'}),
+    mk({title:'西湖游船（环湖）', type:'sight', location:'湖滨二码头', date:D(2), startTime:'15:00', durationMin:90, price:120, note:'整点发船，旺季提前 20 分钟排队。'}),
+    mk({title:'《最忆是杭州》演出', type:'fun', location:'印象西湖剧场', date:D(2), startTime:'19:30', durationMin:90, price:260, note:'已购电子票，入场码在短信里。'}),
+    mk({title:'灵隐寺 + 飞来峰', type:'sight', location:'灵隐景区', date:D(3), startTime:'08:30', durationMin:180, price:75, note:'早上人少；飞来峰石窟别错过。'}),
+    mk({title:'龙井村茶餐', type:'food', location:'龙井村', date:D(3), startTime:'12:00', durationMin:90, price:150}),
+    mk({title:'河坊街逛街', type:'shopping', location:'河坊街历史街区', date:D(3), startTime:'16:00', durationMin:120, price:200, note:'伴手礼预算：龙井茶 / 丝绸。'}),
+    mk({title:'千岛湖一日游', type:'sight', location:'千岛湖中心湖区', date:D(4), startTime:'07:30', durationMin:600, price:310, note:'含游船票，车程约 2.5 小时。'}),
+    // 未放置（在日程库中等待拖入）
+    mk({title:'西溪湿地泛舟', type:'sight', location:'西溪国家湿地公园', expectedDate:D(4), price:80, note:'视天气决定，雨天取消。'}),
+    mk({title:'宋城 + 千古情演出', type:'fun', location:'宋城景区', expectedDate:D(5), price:300, note:'下午场 14:00 / 晚场 19:20 二选一。'}),
+    mk({title:'返程高铁 G7590', type:'transport', location:'杭州东站', expectedDate:D(6), price:73, note:'偏好下午班次，饭后返程。'}),
+    mk({title:'外婆家欢聚晚餐', type:'food', location:'杭州大厦店', price:100}),
+    mk({title:'买伴手礼特产', type:'shopping', price:150}),
+  ];
+}
+
+/* ================= 渲染 ================= */
+function renderAll(){ renderHead(); renderCalendar(); renderLibrary(); renderStats(); }
+
+function renderHead(){
+  const a = state.weekStart, b = addDays(a, 6);
+  $('#weekLabel').textContent = `${a.getFullYear()}年${a.getMonth()+1}月${a.getDate()}日 - ${b.getMonth()+1}月${b.getDate()}日`;
+}
+
+function renderCalendar(){
+  const todayIso = isoOf(new Date());
+  const days = [...Array(COLS)].map((_,i)=>addDays(state.weekStart, i));
+  const isos = days.map(isoOf);
+
+  // 表头
+  $('#calHead').innerHTML = '<div class="h-gutter"></div>' + days.map((d,i)=>{
+    const isToday = isos[i] === todayIso;
+    return `<div class="h-day ${isToday?'today':''}">
+      <div class="dow">周${WEEK_CN[d.getDay()]}</div>
+      <div class="dnum">${d.getMonth()+1}/${d.getDate()}${isToday?'<span class="today-pill">今天</span>':''}</div>
+    </div>`;
+  }).join('');
+
+  // 时间轴（每小时一个标签）
+  $('#calGutter').innerHTML = [...Array(24)].map((_,h)=>
+    `<div class="hr" style="top:${h*2*SLOT_H}px">${pad(h)}:00</div>`).join('');
+
+  // 7 个日列 + 卡片（含重叠并排布局）
+  const host = $('#calDays');
+  host.querySelectorAll('.day-col').forEach(n=>n.remove());
+  const hint = $('#drop-hint'); // 保留 hint 节点
+  days.forEach((d,i)=>{
+    const col = document.createElement('div');
+    col.className = 'day-col' + (isos[i]===todayIso ? ' today' : '');
+    col.style.left = `calc(100% * ${i} / ${COLS})`;
+    col.style.width = `calc(100% / ${COLS})`;
+    const cards = state.schedules.filter(s=>s.date === isos[i] && s.startTime);
+    layoutOverlap(cards);
+    cards.forEach(s=>col.appendChild(cardEl(s)));
+    host.appendChild(col);
+  });
+  host.appendChild(hint);
+}
+
+/* 重叠口径：按簇分道，并排显示（口径文档 §4.5） */
+function layoutOverlap(cards){
+  const sorted = [...cards].sort((a,b)=> hhToMin(a.startTime)-hhToMin(b.startTime) || a.id.localeCompare(b.id));
+  const clusters = [];
+  let cur = null;
+  for(const c of sorted){
+    const st = hhToMin(c.startTime), en = st + c.durationMin;
+    if(!cur || st >= cur.end){ cur = {items:[], end:0}; clusters.push(cur); }
+    cur.items.push(c); cur.end = Math.max(cur.end, en);
+  }
+  for(const cl of clusters){
+    const laneEnds = [];
+    for(const c of cl.items){
+      const st = hhToMin(c.startTime), en = st + c.durationMin;
+      let li = laneEnds.findIndex(e => e <= st);
+      if(li < 0){ laneEnds.push(en); li = laneEnds.length - 1; } else laneEnds[li] = en;
+      c._lane = li;
+    }
+    cl.lanes = laneEnds.length;
+    cl.items.forEach(c => c._lanes = cl.lanes);
+  }
+}
+
+function cardEl(s){
+  const t = TYPE_MAP[s.type];
+  const st = hhToMin(s.startTime), en = st + s.durationMin;
+  const el = document.createElement('div');
+  el.className = 'card';
+  el.dataset.id = s.id;
+  const w = 100 / (s._lanes || 1);
+  el.style.cssText = `--c:${t.color};top:${yOfMin(st)+1}px;height:${yOfMin(s.durationMin)-3}px;left:calc(${(s._lane||0)*w}% + 1px);width:calc(${w}% - 3px);`;
+  const meta = [s.location, fmtMoney(s.price)].filter(Boolean).join(' · ');
+  el.innerHTML = `
+    <div class="c-title" title="${esc(s.title)}">${esc(s.title)}</div>
+    <div class="c-time">${minToHH(st)} - ${minToHH(en)}</div>
+    ${s.durationMin >= 90 && meta ? `<div class="c-meta">${esc(meta)}</div>` : ''}
+    <button class="card-x" type="button" title="取消日程（移回日程库）">×</button>`;
+  return el;
+}
+
+function renderStats(){
+  const isos = [...Array(COLS)].map((_,i)=>isoOf(addDays(state.weekStart,i)));
+  const placed = state.schedules.filter(s=>s.date && isos.includes(s.date));
+  const sum = placed.reduce((a,s)=>a+(s.price||0),0);
+  $('#stats').innerHTML = `本周已安排 <b>${placed.length}</b> 项 · 预估花费 <b>¥${sum.toLocaleString('zh-CN')}</b>`;
+}
+
+/* ---- 日程库 ---- */
+function renderLibrary(){
+  const groups = buildGroups();
+  $('#libList').innerHTML = groups.map(g=>{
+    const key = state.groupBy + ':' + g.key;
+    const closed = state.collapsed.has(key);
+    const t = state.groupBy==='type' ? TYPE_MAP[g.key] : null;
+    const items = g.items.length
+      ? g.items.map(libItemHtml).join('')
+      : '<div class="grp-empty">暂无日程</div>';
+    return `<div class="grp ${closed?'closed':''} ${g.items.length?'':'empty-op'}">
+      <div class="grp-h" data-key="${esc(key)}">
+        <span class="swatch" style="${t?`--c:${t.color}`:''}"></span>
+        <span class="grp-name">${esc(g.name)}</span>
+        <span class="grp-cnt">${g.items.length}</span>
+        <span class="chev">▼</span>
+      </div>
+      <div class="grp-items">${items}</div>
+    </div>`;
+  }).join('');
+}
+
+function buildGroups(){
+  const list = state.schedules;
+  if(state.groupBy === 'type'){
+    return TYPES.map(t => ({key:t.k, name:t.name, items:list.filter(s=>s.type===t.k)}));
+  }
+  if(state.groupBy === 'location'){
+    const map = new Map();
+    for(const s of list){
+      const k = s.location || '';
+      if(!map.has(k)) map.set(k, []);
+      map.get(k).push(s);
+    }
+    return [...map.entries()]
+      .sort((a,b)=> a[0] && b[0] ? a[0].localeCompare(b[0],'zh-Hans-CN') : a[0] ? -1 : 1)
+      .map(([k,items]) => ({key:k||'__none__', name:k||'未填写地点', items}));
+  }
+  // expectedDate
+  const map = new Map();
+  for(const s of list){
+    const k = s.expectedDate || '';
+    if(!map.has(k)) map.set(k, []);
+    map.get(k).push(s);
+  }
+  return [...map.entries()]
+    .sort((a,b)=> a[0] && b[0] ? a[0].localeCompare(b[0]) : a[0] ? -1 : 1)
+    .map(([k,items])=>{
+      if(!k) return {key:'__none__', name:'未设定', items};
+      const d = parseISO(k);
+      return {key:k, name:`${fmtShort(k)} 周${WEEK_CN[d.getDay()]}`, items};
+    });
+}
+
+function libItemHtml(s){
+  const t = TYPE_MAP[s.type];
+  const placed = !!(s.date && s.startTime);
+  const loc = s.location ? esc(s.location) : '<span class="none">未填写地点</span>';
+  const price = s.price!=null ? ` · ${fmtMoney(s.price)}` : '';
+  return `<div class="lib-item ${placed?'placed':''}" data-id="${s.id}" role="button" tabindex="0" ${placed?'':'draggable="false"'}>
+    <span class="dot" style="--c:${t.color}"></span>
+    <div class="lib-main" style="min-width:0;flex:1">
+      <div class="lib-title" title="${esc(s.title)}">${esc(s.title)}</div>
+      <div class="lib-sub">${loc}${price}</div>
+      ${placed ? `<span class="lib-tag">已放置 ${fmtShort(s.date)} ${s.startTime}</span>` : ''}
+    </div>
+  </div>`;
+}
+
+/* ================= 拖拽系统（pointer 自实现） ================= */
+let drag = null; // {kind, s, cardEl, srcEl, px, py, off, dayRect, daysRect, orig, started, target, newSt, newDur, ghost}
+let suppressClick = false; // 指针路径处理过后抑制原生 click，避免重复弹窗
+
+function hitTest(gx, gy, durMin){
+  const r = drag.daysRect;
+  if(gx < r.left || gx > r.right || gy < r.top || gy > r.bottom - 2) return null;
+  const colIdx = clamp(Math.floor((gx - r.left) / (r.width / COLS)), 0, COLS-1);
+  let m = clamp(snapY(gy - r.top), 0, DAY_MIN - durMin); // 日末截断（保持时长）
+  return {colIdx, m};
+}
+function showHint(t, s){
+  const h = $('#drop-hint');
+  if(!t){ h.style.display='none'; return; }
+  const dur = s.durationMin;
+  h.style.display = 'block';
+  h.style.setProperty('--c', TYPE_MAP[s.type].color);
+  h.style.left = `calc(100% * ${t.colIdx} / ${COLS} + 2px)`;
+  h.style.width = `calc(100% / ${COLS} - 6px)`;
+  h.style.top = `${yOfMin(t.m)+1}px`;
+  h.style.height = `${yOfMin(dur)-3}px`;
+}
+function makeGhost(cardEl){
+  const g = cardEl.cloneNode(true);
+  g.classList.add('ghost'); g.classList.remove('drag-src');
+  g.style.width = cardEl.offsetWidth + 'px';
+  g.style.left = '-9999px';
+  document.body.appendChild(g);
+  return g;
+}
+function makeLibGhost(s){
+  const g = document.createElement('div');
+  g.className = 'ghost-mini';
+  g.style.setProperty('--c', TYPE_MAP[s.type].color);
+  g.textContent = s.title;
+  document.body.appendChild(g);
+  return g;
+}
+function cleanupDrag(d){
+  d.ghost && d.ghost.remove();
+  d.cardEl && d.cardEl.classList.remove('drag-src','resizing');
+  d.srcEl && d.srcEl.classList.remove('drag-src');
+  $('#drop-hint').style.display = 'none';
+  document.body.classList.remove('noselect','resizing');
+}
+
+/* ---- 日程表卡片：pointerdown ---- */
+$('#calDays').addEventListener('pointerdown', e => {
+  if(e.button !== 0) return;
+  if(e.target.closest('.card-x')) return;             // × 走原生 click
+  const cardEl = e.target.closest('.card');
+  if(!cardEl) return;
+  e.preventDefault();
+  const s = byId(cardEl.dataset.id); if(!s) return;
+  const r = cardEl.getBoundingClientRect();
+  const zone = (e.clientY - r.top <= 6) ? 't' : (r.bottom - e.clientY <= 6) ? 'b' : 'm';
+  drag = {
+    kind: zone==='m' ? 'move' : (zone==='t' ? 'resize-t' : 'resize-b'),
+    s, cardEl, pointerId: e.pointerId,
+    px: e.clientX, py: e.clientY,
+    off: {x: e.clientX - r.left, y: e.clientY - r.top}, // 偏移锁定（口径 §4.2）
+    dayRect: cardEl.parentElement.getBoundingClientRect(),
+    daysRect: $('#calDays').getBoundingClientRect(),
+    orig: {st: hhToMin(s.startTime), dur: s.durationMin},
+    started: false, target: null, newSt: null, newDur: null, ghost: null,
+  };
+});
+
+/* 边缘 hover 光标提示 */
+$('#calDays').addEventListener('mousemove', e => {
+  if(drag) return;
+  const c = e.target.closest('.card'); if(!c) return;
+  const r = c.getBoundingClientRect();
+  c.style.cursor = (e.clientY - r.top <= 6 || r.bottom - e.clientY <= 6) ? 'ns-resize' : 'grab';
+});
+
+/* ---- 日程库条目：pointerdown ---- */
+$('#libList').addEventListener('pointerdown', e => {
+  if(e.button !== 0) return;
+  const item = e.target.closest('.lib-item');
+  if(!item) return;
+  const s = byId(item.dataset.id); if(!s) return;
+  e.preventDefault();
+  if(s.date && s.startTime){                          // 已放置：拦截拖拽，但允许点击查看详情（口径 §4.6/§6.3）
+    drag = { kind:'lib-click', s, pointerId: e.pointerId, started:false };
+    return;
+  }
+  drag = {
+    kind: 'lib', s, srcEl: item, pointerId: e.pointerId,
+    px: e.clientX, py: e.clientY,
+    off: {x: 26, y: 16},                              // 幽灵相对指针的固定偏移
+    daysRect: $('#calDays').getBoundingClientRect(),
+    started: false, target: null, ghost: null,
+  };
+});
+
+/* ---- 全局 move / up ---- */
+window.addEventListener('pointermove', e => {
+  if(!drag || e.pointerId !== drag.pointerId) return;
+  const d = drag;
+  if(!d.started){
+    if(Math.hypot(e.clientX - d.px, e.clientY - d.py) < 5) return;
+    d.started = true;
+    document.body.classList.add('noselect');
+    if(d.kind === 'move'){ d.ghost = makeGhost(d.cardEl); d.cardEl.classList.add('drag-src'); }
+    else if(d.kind === 'lib'){ d.ghost = makeLibGhost(d.s); d.srcEl.classList.add('drag-src'); }
+    else { d.cardEl.classList.add('resizing'); document.body.classList.add('resizing'); }
+  }
+  if(d.kind === 'lib-click') return;                  // 灰色条目：不响应移动
+  if(d.kind === 'move' || d.kind === 'lib'){
+    const gx = e.clientX - d.off.x, gy = e.clientY - d.off.y; // 幽灵顶部边 = 判定基准
+    if(d.ghost){ d.ghost.style.left = gx+'px'; d.ghost.style.top = gy+'px'; }
+    d.target = hitTest(gx, gy, d.s.durationMin);
+    showHint(d.target, d.s);
+  }else if(d.kind === 'resize-b'){
+    const st = d.orig.st;
+    const en = clamp(snapY(e.clientY - d.dayRect.top), st + 30, DAY_MIN); // 最小 30 分钟 / 日末截断
+    d.newSt = st; d.newDur = en - st; applyLiveResize(d);
+  }else if(d.kind === 'resize-t'){
+    const end = d.orig.st + d.orig.dur;               // 上边缘：结束时刻不变
+    const st = clamp(snapY(e.clientY - d.dayRect.top), 0, end - 30);
+    d.newSt = st; d.newDur = end - st; applyLiveResize(d);
+  }
+});
+function applyLiveResize(d){
+  const el = d.cardEl;
+  el.style.top = `${yOfMin(d.newSt)+1}px`;
+  el.style.height = `${yOfMin(d.newDur)-3}px`;
+  const tEl = el.querySelector('.c-time');
+  if(tEl) tEl.textContent = `${minToHH(d.newSt)} - ${minToHH(d.newSt + d.newDur)}`;
+}
+window.addEventListener('pointerup', e => {
+  if(!drag || e.pointerId !== drag.pointerId) return;
+  const d = drag; drag = null;
+  cleanupDrag(d);
+  const s = d.s;
+  suppressClick = true; setTimeout(()=>{ suppressClick = false; }, 0); // 指针路径已处理，吞掉随后的原生 click
+  if(!d.started){                                     // 未构成拖拽 → 视为点击，打开详情
+    if(d.kind==='move' || d.kind==='lib' || d.kind==='lib-click') openDetail(s.id);
+    return;
+  }
+  if(d.kind === 'move' || d.kind === 'lib'){
+    if(d.target){
+      s.date = isoOf(addDays(state.weekStart, d.target.colIdx));
+      s.startTime = minToHH(d.target.m);
+      touch(s); save(); renderAll();
+      toast(`${d.kind==='lib' ? '已放置到' : '已移动到'} ${fmtShort(s.date)} ${s.startTime}`);
+    }else{
+      renderAll();                                    // 表外松手 → 放弃操作
+    }
+  }else{
+    if(d.newSt != null){
+      s.startTime = minToHH(d.newSt);
+      s.durationMin = d.newDur;
+      touch(s); save(); renderAll();
+      toast(`已调整为 ${minToHH(d.newSt)} - ${minToHH(d.newSt + d.newDur)}`);
+    }
+  }
+});
+window.addEventListener('pointercancel', e => {
+  if(!drag || e.pointerId !== drag.pointerId) return;
+  const d = drag; drag = null;
+  cleanupDrag(d); renderAll();                    // 系统中断拖拽 → 安全放弃
+});
+window.addEventListener('keydown', e => {
+  if(e.key !== 'Escape') return;
+  if(drag){ const d = drag; drag = null; cleanupDrag(d); renderAll(); return; }
+  hideModal(); hideConfirm();
+});
+
+/* ---- click 激活回退（键盘 / 辅助技术 / 事件合成场景；真实指针流已被 suppressClick 抑制） ---- */
+$('#calDays').addEventListener('click', e => {
+  if(suppressClick || e.target.closest('.card-x')) return;
+  const c = e.target.closest('.card');
+  if(c){ const s = byId(c.dataset.id); s && openDetail(s.id); }
+});
+$('#libList').addEventListener('click', e => {
+  if(suppressClick) return;
+  if(e.target.closest('.grp-h')) return;               // 分组头折叠由自身逻辑处理
+  const item = e.target.closest('.lib-item');
+  if(item){ const s = byId(item.dataset.id); s && openDetail(s.id); }
+});
+
+/* ---- × 取消日程（原生 click） ---- */
+$('#calDays').addEventListener('click', e => {
+  const x = e.target.closest('.card-x'); if(!x) return;
+  const cardEl = x.closest('.card');
+  const s = byId(cardEl.dataset.id); if(!s) return;
+  askConfirm('取消该日程？',
+    `“${esc(s.title)}”将移回日程库：日期与时间清空，<br>预计日期将更新为 <b>${fmtShort(s.date)}</b>（上次实际日期）。`,
+    '确认取消',
+    () => {
+      s.expectedDate = s.date;                        // 回写（口径 §5）
+      s.date = null; s.startTime = null;
+      touch(s); save(); renderAll();
+      toast(`已取消，预计日期回写为 ${fmtShort(s.expectedDate)}`);
+    });
+});
+
+/* ================= 弹窗 ================= */
+const DUR_OPTIONS = [30,60,90,120,180,240,300,360,480,600,720,1440];
+const durLabel = m => m<60 ? `${m} 分钟` : m%60===0 ? `${m/60} 小时` : `${(m/60).toFixed(1)} 小时`;
+$('#f-dur').innerHTML = DUR_OPTIONS.map(m=>`<option value="${m}">${durLabel(m)}</option>`).join('');
+$('#f-type-chips').innerHTML = TYPES.map(t=>
+  `<button type="button" class="chip" data-k="${t.k}" style="--c:${t.color}"><span class="cd"></span>${t.name}</button>`).join('');
+$('#f-type-chips').addEventListener('click', e => {
+  const c = e.target.closest('.chip'); if(!c) return;
+  $('#f-type-chips').querySelectorAll('.chip').forEach(x=>x.classList.toggle('active', x===c));
+  $('#f-type').value = c.dataset.k;
+});
+
+function openDetail(id){
+  const s = byId(id); if(!s) return;
+  editingId = id;
+  $('#modalTitle').textContent = '查看 / 编辑日程';
+  $('#f-title').value = s.title;
+  setTypeVal(s.type);
+  $('#f-loc').value = s.location;
+  $('#f-date').value = s.date || '';
+  $('#f-time').value = s.startTime || '';
+  $('#f-dur').value = String(clamp(s.durationMin,30,1440));
+  $('#f-exp').value = s.expectedDate || '';
+  $('#f-price').value = s.price==null ? '' : s.price;
+  $('#f-note').value = s.note;
+  setErr(false);
+  $('#modalOverlay').classList.add('show');
+  setTimeout(()=>$('#f-title').focus(), 50);
+}
+function openCreate(){
+  editingId = null;
+  $('#modalTitle').textContent = '新建日程';
+  $('#f-title').value = '';
+  setTypeVal('sight');
+  $('#f-loc').value = ''; $('#f-date').value = ''; $('#f-time').value = '';
+  $('#f-dur').value = '60'; $('#f-exp').value = ''; $('#f-price').value = ''; $('#f-note').value = '';
+  setErr(false);
+  $('#modalOverlay').classList.add('show');
+  setTimeout(()=>$('#f-title').focus(), 50);
+}
+function setTypeVal(k){
+  $('#f-type').value = k;
+  $('#f-type-chips').querySelectorAll('.chip').forEach(c=>c.classList.toggle('active', c.dataset.k===k));
+}
+function setErr(msg){
+  $('#rowTitle').classList.toggle('error', !!msg);
+  $('#errTitle').textContent = msg || '';
+}
+function hideModal(){ $('#modalOverlay').classList.remove('show'); }
+$('#modalClose').addEventListener('click', hideModal);
+$('#modalCancel').addEventListener('click', hideModal);
+$('#modalOverlay').addEventListener('pointerdown', e => { if(e.target === $('#modalOverlay')) hideModal(); });
+$('#newBtn').addEventListener('click', openCreate);
+
+$('#modalForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const title = $('#f-title').value.trim();
+  if(!title) return setErr('请填写事项名称');
+  if(title.length > 30) return setErr('不超过 30 字');
+
+  let date = $('#f-date').value || null;
+  let time = $('#f-time').value || null;
+  if((date && !time) || (!date && time)){             // 口径 §3.3：只填其一 → 均置空并提示
+    date = null; time = null;
+    toast('日期与时间需同时填写，已按“未放置”保存');
+  }
+  if(time) time = minToHH(Math.floor(hhToMin(time)/SLOT) * SLOT); // 向下对齐 30 分钟
+
+  const patch = {
+    title, type: $('#f-type').value,
+    location: $('#f-loc').value.trim().slice(0,30),
+    date, startTime: time,
+    durationMin: +$('#f-dur').value,
+    expectedDate: $('#f-exp').value || null,
+    price: $('#f-price').value === '' ? null : Math.max(0, Math.round(+$('#f-price').value * 100) / 100),
+    note: $('#f-note').value.trim().slice(0,200),
+  };
+  if(editingId){
+    const s = byId(editingId);
+    Object.assign(s, patch); touch(s);
+    if(s.date && s.startTime) snapIntoDay(s);
+  }else{
+    const s = normalize({...patch, id:uid(), createdAt:Date.now(), updatedAt:Date.now()});
+    if(s.date && s.startTime) snapIntoDay(s);
+    state.schedules.push(s);
+  }
+  save(); renderAll(); hideModal(); toast('已保存');
+});
+/* 手动编辑后的钳制：结束不越过 24:00 */
+function snapIntoDay(s){
+  const st = hhToMin(s.startTime);
+  if(st + s.durationMin > DAY_MIN) s.durationMin = DAY_MIN - st;
+  if(s.durationMin < 30){ s.durationMin = 30; }
+  s.startTime = minToHH(Math.min(st, DAY_MIN - 30));
+}
+
+/* ---- 通用确认气泡 ---- */
+let confirmCb = null;
+function askConfirm(title, bodyHtml, yesText, cb){
+  $('#confirmTitle').textContent = title;
+  $('#confirmBody').innerHTML = bodyHtml;
+  $('#confirmYes').textContent = yesText || '确认';
+  confirmCb = cb;
+  $('#confirmOverlay').classList.add('show');
+}
+function hideConfirm(){ $('#confirmOverlay').classList.remove('show'); confirmCb = null; }
+$('#confirmNo').addEventListener('click', hideConfirm);
+$('#confirmOverlay').addEventListener('pointerdown', e => { if(e.target === $('#confirmOverlay')) hideConfirm(); });
+$('#confirmYes').addEventListener('click', () => { const cb = confirmCb; hideConfirm(); cb && cb(); });
+
+/* ================= 顶栏 / 库事件 ================= */
+$('#prevWeek').addEventListener('click', ()=>{ state.weekStart = addDays(state.weekStart,-7); renderAll(); });
+$('#nextWeek').addEventListener('click', ()=>{ state.weekStart = addDays(state.weekStart, 7); renderAll(); });
+$('#todayBtn').addEventListener('click', ()=>{
+  state.weekStart = mondayOf(new Date()); renderAll();
+  $('#calScroll').scrollTop = yOfMin(7*60) - SLOT_H*2; // 滚动到 07:00 附近
+});
+$('#resetBtn').addEventListener('click', ()=>{
+  askConfirm('重置示例数据？','将清空本地所有修改，恢复为内置的“杭州 3 日游”示例。','确认重置', ()=>{
+    state.schedules = seedData(); save(); renderAll(); toast('已重置示例数据');
+  });
+});
+$('#libTabs').addEventListener('click', e => {
+  const b = e.target.closest('button'); if(!b) return;
+  state.groupBy = b.dataset.g;
+  state.collapsed = new Set();                        // 切换后分组全部展开（口径 §6.1）
+  try{ localStorage.setItem(UI_KEY, JSON.stringify({groupBy: state.groupBy})); }catch(_){}
+  renderLibrary();
+});
+$('#libList').addEventListener('click', e => {
+  const h = e.target.closest('.grp-h'); if(!h) return;
+  const key = h.dataset.key;
+  state.collapsed.has(key) ? state.collapsed.delete(key) : state.collapsed.add(key);
+  renderLibrary();
+});
+
+/* ---- Toast ---- */
+let toastTimer = null;
+function toast(msg){
+  const t = $('#toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('show'), 2400);
+}
+
+/* ================= 初始化 ================= */
+try{ const ui = JSON.parse(localStorage.getItem(UI_KEY)||'{}'); if(ui.groupBy) state.groupBy = ui.groupBy; }catch(_){}
+load();
+$('#libTabs').querySelectorAll('button').forEach(b=>b.classList.toggle('active', b.dataset.g===state.groupBy));
+renderAll();
+$('#calScroll').scrollTop = yOfMin(7*60) - SLOT_H*2;   // 初始定位到 07:00 附近（口径 §4.1）
+</script>
+</body>
+</html>
