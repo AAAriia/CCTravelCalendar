@@ -1,4 +1,4 @@
-import type { Schedule, ScheduleType } from '@/types';
+import type { ExpenseType, Schedule, ScheduleType } from '@/types';
 import { TYPE_MAP } from '@/constants';
 import { clamp } from '@/utils/datetime';
 
@@ -44,6 +44,12 @@ export function normalizeSchedule(raw: Record<string, unknown>, planId: string):
     priceVariance:
       typeof raw.priceVariance === 'number' && Number.isFinite(raw.priceVariance)
         ? Math.round(raw.priceVariance * 100) / 100
+        : null,
+    confirmed: raw.confirmed === true,
+    expenseType: raw.expenseType === 'optional' ? 'optional' : ('required' as ExpenseType),
+    paidAmount:
+      typeof raw.paidAmount === 'number' && Number.isFinite(raw.paidAmount) && raw.paidAmount >= 0
+        ? Math.round(raw.paidAmount * 100) / 100
         : null,
     note: typeof raw.note === 'string' ? raw.note.slice(0, 200) : '',
     deletedAt: typeof raw.deletedAt === 'number' && raw.deletedAt > 0 ? raw.deletedAt : null,

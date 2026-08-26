@@ -79,7 +79,8 @@ export function installDragSystem(): void {
 export function beginCardDrag(e: PointerEvent, schedule: Schedule, cardEl: HTMLElement): void {
   if (useIsMobile().value) return;
   if (e.button !== 0) return;
-  if ((e.target as HTMLElement).closest('.card-x')) return; // × 走原生 click
+  const t = e.target as HTMLElement;
+  if (t.closest('.card-x') || t.closest('.confirm-check')) return; // × 与勾选走原生 click
   e.preventDefault();
   if (!calDaysEl) return;
   const r = cardEl.getBoundingClientRect();

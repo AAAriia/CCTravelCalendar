@@ -22,6 +22,7 @@
     </div>
     <div class="spacer"></div>
 
+    <button class="btn" title="费用预算表（与行程同步）" @click="emit('budget')">预算表</button>
     <button class="btn" title="备份 / 恢复数据" @click="emit('importExport')">导入导出</button>
     <button class="btn" title="已删除的日程" @click="emit('trash')">回收站</button>
     <button class="btn ghost-danger" title="清空本地修改，恢复示例数据" @click="emit('reset')">重置示例数据</button>
@@ -36,6 +37,7 @@ import { yOfMin } from '@/utils/datetime';
 
 const emit = defineEmits<{
   managePlans: [];
+  budget: [];
   importExport: [];
   trash: [];
   reset: [];

@@ -96,6 +96,7 @@ describe('PlannerView 集成交互（jsdom 指针事件模拟）', () => {
     expect(wrapper.findAll('.card')).toHaveLength(8);
     expect(wrapper.findAll('.grp')).toHaveLength(6);
     expect(wrapper.text()).toContain('本周已安排 8 项');
+    expect(wrapper.text()).toContain('2026年9月28日 - 10月4日'); // 首开定位行程周
   });
 
   it('点击卡片（完整指针序列）→ 打开详情，含仅详情字段', async () => {
@@ -124,7 +125,7 @@ describe('PlannerView 集成交互（jsdom 指针事件模拟）', () => {
     await flushPromises();
     expect(food.date).toBeNull();
     expect(food.startTime).toBeNull();
-    expect(food.expectedDate).toBe(store.weekIsoList[1]); // 回写为上次实际日期（周二）
+    expect(food.expectedDate).toBe(store.weekIsoList[3]); // 回写为上次实际日期（2026-10-01 周四）
     const item = wrapper.findAll('.lib-item').find((c) => c.text()!.includes('吃饭'))!;
     expect(item.classes()).not.toContain('placed');
   });
@@ -215,10 +216,13 @@ describe('移动端单日视图（mobileSel 驱动，回归：日期与卡片对
     await flushPromises();
     expect(wrapper.findAll('.day-col')).toHaveLength(1);
     const titles = wrapper.findAll('.card').map((c) => c.text() ?? '');
-    expect(titles.some((t) => t.includes('浮潜'))).toBe(true); // D2=周三卡片
-    expect(titles.some((t) => t.includes('高铁'))).toBe(false); // 周一卡片不在
-    expect(titles.some((t) => t.includes('吃饭'))).toBe(false); // 周二卡片不在
-    expect(titles.some((t) => t.includes('宫古'))).toBe(false); // 周五卡片不在
+    // 种子固定日期：周三 = 9/30 出发日
+    expect(titles.some((t) => t.includes('高铁'))).toBe(true);
+    expect(titles.some((t) => t.includes('往返机票'))).toBe(true);
+    expect(titles.some((t) => t.includes('酒店'))).toBe(true);
+    expect(titles.some((t) => t.includes('吃饭'))).toBe(false); // 10/1 周四
+    expect(titles.some((t) => t.includes('浮潜'))).toBe(false); // 10/2 周五
+    expect(titles.some((t) => t.includes('宫古'))).toBe(false); // 10/4 周日
     // 表头仅显示选中日（其余由 CSS 隐藏，DOM 仍渲染 7 个）
     expect(wrapper.findAll('.h-day')).toHaveLength(7);
     wrapper.unmount();

@@ -43,7 +43,7 @@ const csvCell = (v: string | number | null): string => {
 /** 当前行程 CSV 导出（Excel 兼容：UTF-8 BOM） */
 export function buildPlanCsv(plans: Plan[], schedules: Schedule[]): string {
   const planNames = new Map(plans.map((p) => [p.id, p.name]));
-  const header = ['行程', '事项名称', '类型', '日期', '开始时间', '结束时间', '时长(分钟)', '地点', '预计日期', '预估价格', '金额波动', '区间下限', '区间上限', '状态', '备注'];
+  const header = ['行程', '事项名称', '类型', '日期', '开始时间', '结束时间', '时长(分钟)', '地点', '预计日期', '预估价格', '金额波动', '区间下限', '区间上限', '费用类型', '已确认', '已付金额', '状态', '备注'];
   const rows = schedules.map((s) => {
     const end = s.startTime ? minToHH(Number(s.startTime.slice(0, 2)) * 60 + Number(s.startTime.slice(3)) + s.durationMin) : '';
     const range = priceRange(s.price, s.priceVariance);
@@ -61,6 +61,9 @@ export function buildPlanCsv(plans: Plan[], schedules: Schedule[]): string {
       s.priceVariance ?? '',
       s.price == null && s.priceVariance == null ? '' : range.min,
       s.price == null && s.priceVariance == null ? '' : range.max,
+      s.expenseType === 'optional' ? '可选' : '必须',
+      s.confirmed ? '是' : '否',
+      s.paidAmount ?? '',
       s.deletedAt !== null ? '已删除' : s.date ? '已放置' : '未放置',
       s.note,
     ].map(csvCell).join(',');

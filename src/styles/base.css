@@ -98,6 +98,21 @@ body.resizing, body.resizing * { cursor: ns-resize !important; }
 .day-col { position: absolute; top: 0; bottom: 0; border-right: 1px solid var(--line-soft); }
 .day-col.today { background: rgba(37, 99, 235, 0.035); }
 
+/* ===== 勾选确认（口径 §14） ===== */
+.confirm-check {
+  flex: none; width: 15px; height: 15px; border-radius: 50%;
+  border: 1.5px solid #c4c9d4; background: #fff; color: transparent;
+  font-size: 10px; line-height: 12px; cursor: pointer; padding: 0; font-family: inherit;
+}
+.confirm-check:hover { border-color: #10b981; }
+.confirm-check.on { background: #10b981; border-color: #10b981; color: #fff; }
+.card .c-head { display: flex; align-items: center; gap: 5px; }
+.card .c-head .c-title { flex: 1; min-width: 0; }
+.card.confirmed { border-left-width: 4px; }
+.lib-item .lib-head { display: flex; align-items: center; gap: 6px; }
+.lib-item .lib-head .lib-title { flex: 1; min-width: 0; }
+.lib-item.placed .confirm-check { opacity: 0.75; }
+
 /* ===== 日程卡片 ===== */
 .card {
   position: absolute; border-radius: 6px; overflow: hidden; cursor: grab; touch-action: none;

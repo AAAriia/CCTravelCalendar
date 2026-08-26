@@ -28,6 +28,7 @@
               <span v-if="p.id === store.currentPlanId" class="plan-cur">当前</span>
               <span class="spacer"></span>
               <button class="btn sm" @click="open(p.id)">打开</button>
+              <button class="btn sm" @click="copy(p)">复制</button>
               <button class="btn sm" @click="startRename(p)">重命名</button>
               <button class="btn sm ghost-danger" @click="askRemove(p)">删除</button>
             </template>
@@ -43,12 +44,15 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
+import { useRouter } from 'vue-router';
 import type { Plan } from '@/types';
 import { usePlannerStore } from '@/stores/planner';
+import { toast } from '@/composables/useToast';
 
 defineProps<{ visible: boolean }>();
 const emit = defineEmits<{ close: []; removePlan: [plan: Plan] }>();
 const store = usePlannerStore();
+const router = useRouter();
 
 const newName = ref('');
 const errName = ref('');
@@ -72,6 +76,13 @@ function startRename(p: Plan): void {
 function saveRename(id: string): void {
   if (editName.value.trim()) store.renamePlan(id, editName.value);
   editingId.value = null;
+}
+
+function copy(p: Plan): void {
+  const c = store.copyPlan(p.id);
+  if (!c) return;
+  void router.push({ name: 'plan', params: { planId: c.id } });
+  toast(`已复制为「${c.name}」并切换`);
 }
 
 function open(id: string): void {

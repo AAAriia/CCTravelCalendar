@@ -10,7 +10,14 @@
   >
     <span class="dot" :style="{ '--c': color }"></span>
     <div class="lib-main">
-      <div class="lib-title">{{ schedule.title }}</div>
+      <div class="lib-head">
+        <button
+          class="confirm-check" type="button" :class="{ on: schedule.confirmed }"
+          :title="schedule.confirmed ? '已确认（点击取消勾选）' : '标记为已确认'"
+          @click.stop="store.setConfirmed(schedule.id, !schedule.confirmed)"
+        >✓</button>
+        <div class="lib-title">{{ schedule.title }}</div>
+      </div>
       <div class="lib-sub">
         <template v-if="schedule.location">{{ schedule.location }}</template>
         <span v-else class="none">未填写地点</span>
@@ -29,7 +36,9 @@ import { TYPE_MAP } from '@/constants';
 import { fmtShort } from '@/utils/format';
 import { fmtPriceRange } from '@/utils/price';
 import { beginLibDrag, suppressClick } from '@/composables/useDragSchedule';
+import { usePlannerStore } from '@/stores/planner';
 
+const store = usePlannerStore();
 const props = defineProps<{ schedule: Schedule }>();
 const emit = defineEmits<{ open: [id: string] }>();
 

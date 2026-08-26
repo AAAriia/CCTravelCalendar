@@ -2,13 +2,21 @@
   <div
     class="card"
     ref="el"
+    :class="{ confirmed: schedule.confirmed }"
     :style="cardStyle"
     :title="schedule.title"
     @pointerdown="onPointerDown"
     @mousemove="onHover"
     @click="onClick"
   >
-    <div class="c-title">{{ schedule.title }}</div>
+    <div class="c-head">
+      <button
+        class="confirm-check" type="button" :class="{ on: schedule.confirmed }"
+        :title="schedule.confirmed ? '已确认（点击取消勾选）' : '标记为已确认'"
+        @click.stop="store.setConfirmed(schedule.id, !schedule.confirmed)"
+      >✓</button>
+      <div class="c-title">{{ schedule.title }}</div>
+    </div>
     <div class="c-time">{{ timeRange }}</div>
     <div v-if="showMeta" class="c-meta">{{ meta }}</div>
     <button class="card-x" type="button" title="取消日程（移回日程库）" @click.stop="emit('cancel', schedule.id)">×</button>
@@ -22,7 +30,9 @@ import { TYPE_MAP } from '@/constants';
 import { hhToMin, minToHH, yOfMin } from '@/utils/datetime';
 import { fmtPriceRange } from '@/utils/price';
 import { beginCardDrag, suppressClick } from '@/composables/useDragSchedule';
+import { usePlannerStore } from '@/stores/planner';
 
+const store = usePlannerStore();
 const props = defineProps<{
   schedule: Schedule;
   lane: number;

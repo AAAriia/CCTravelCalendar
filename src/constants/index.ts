@@ -28,6 +28,12 @@ export const DUR_OPTIONS = [30, 60, 90, 120, 180, 240, 300, 360, 480, 600, 720, 
 
 export const WEEK_CN = ['日', '一', '二', '三', '四', '五', '六'] as const;
 
-/** localStorage 存储键与 schema 版本（v2：种子数据更换为冲绳行程 + 新增 priceVariance 字段） */
-export const STORAGE_KEY = 'tp_app_v2';
-export const SCHEMA_VERSION = 2;
+/** 费用类型（预算表） */
+export const EXPENSE_TYPES: ReadonlyArray<{ k: 'required' | 'optional'; name: string }> = [
+  { k: 'required', name: '必须' },
+  { k: 'optional', name: '可选' },
+];
+
+/** localStorage 存储键与 schema 版本（v3：新增 confirmed/expenseType/paidAmount + 种子改为固定日期） */
+export const STORAGE_KEY = 'tp_app_v3';
+export const SCHEMA_VERSION = 3;

@@ -4,6 +4,10 @@ import { usePlannerStore } from '@/stores/planner';
 import { isoOf, mondayOf, addDays } from '@/utils/datetime';
 import { fmtShort } from '@/utils/format';
 
+/** 种子固定日期（2026-09-30 出发窗口）与所在周 */
+const SD = { d0: '2026-09-30', d1: '2026-10-01', d2: '2026-10-02', d3: '2026-10-03', d4: '2026-10-04' };
+const SEED_MONDAY = '2026-09-28';
+
 beforeEach(() => {
   localStorage.clear();
   setActivePinia(createPinia());
@@ -25,6 +29,8 @@ describe('planner store · 初始化与种子', () => {
     expect(store.schedules).toHaveLength(9);
     expect(store.currentPlanId).toBe(store.plans[0].id);
     expect(store.loaded).toBe(true);
+    // 首次播种后自动定位到行程所在周（9/30 → 周一 9/28）
+    expect(store.weekStartIso).toBe(SEED_MONDAY);
   });
 
   it('重复 init 幂等（不重复播种）', async () => {
@@ -107,10 +113,10 @@ describe('planner store · 状态机 E1–E8（口径文档 §3.2）', () => {
     const flight = findByTitle(store, '宫古往返'); // D4 周五 09:00
     expect(flight.expectedDate).toBeNull();
     const lastDate = store.cancelSchedule(flight.id);
-    expect(lastDate).toBe(mondayIso(4));
+    expect(lastDate).toBe(SD.d4);
     expect(flight.date).toBeNull();
     expect(flight.startTime).toBeNull();
-    expect(flight.expectedDate).toBe(mondayIso(4)); // 回写 ✓
+    expect(flight.expectedDate).toBe(SD.d4); // 回写 ✓
     expect(store.groups.length).toBeGreaterThan(0);
   });
 
@@ -178,7 +184,7 @@ describe('planner store · 统计口径（口径文档 §8：金额区间 = 各�
   it('未放置不计入：放置"北部交通"(空金额±500) 后 max +500、min 不变', async () => {
     const store = await boot();
     const north = findByTitle(store, '北部交通');
-    store.placeSchedule(north.id, mondayIso(3), 600, 'place');
+    store.placeSchedule(north.id, SD.d3, 600, 'place');
     expect(store.weekStats.count).toBe(9);
     expect(store.weekStats.min).toBe(7206); // 0~500 → min 贡献 0
     expect(store.weekStats.max).toBe(8795); // 500
@@ -189,8 +195,8 @@ describe('planner store · 统计口径（口径文档 §8：金额区间 = 各�
     store.prevWeek();
     expect(store.weekStats.count).toBe(0);
     expect(store.weekStats.min).toBe(0);
-    store.goToday();
-    expect(store.weekStats.count).toBe(8);
+    store.goToday(); // 回到"今天"所在周（8 月，无数据）
+    expect(store.weekStats.count).toBe(0);
   });
 });
 
@@ -226,7 +232,7 @@ describe('planner store · 日程库分组口径（口径文档 §6）', () => {
     store.cancelSchedule(findByTitle(store, '吃饭').id); // D1 → 周二
     store.setGroupBy('expectedDate');
     const g = store.groups.find((x) => x.items.some((i) => i.title.includes('吃饭')));
-    expect(g!.name).toContain(fmtShort(mondayIso(1)));
+    expect(g!.name).toContain(fmtShort(SD.d1));
   });
 
   it('setGroupBy 重置折叠状态（口径 §6.1）', async () => {
@@ -317,5 +323,101 @@ describe('planner store · 行程管理', () => {
     expect(store.schedules).toHaveLength(9);
     expect(store.weekStats.count).toBe(8);
     expect(store.groupBy).toBe('type');
+  });
+});
+
+describe('planner store · 勾选确认（口径 §14）', () => {
+  it('种子已放置日程均为已确认（互不重叠）', async () => {
+    const store = await boot();
+    const placed = store.activeSchedules.filter((s) => s.date);
+    expect(placed.every((s) => s.confirmed)).toBe(true);
+    expect(store.activeSchedules.find((s) => !s.date)!.confirmed).toBe(false); // 北部交通未勾选
+  });
+
+  it('E3 放置到无重叠时段 → 自动勾选；有重叠 → 不勾选', async () => {
+    const store = await boot();
+    const north = findByTitle(store, '北部交通');
+    const placed = store.placeSchedule(north.id, SD.d3, 600, 'place');
+    expect(placed!.confirmed).toBe(true); // 10:00 独占
+    // 新建日程放同一时段 → 重叠不勾选
+    const [dup] = store.createSchedule({ title: '重叠测试', type: 'food' });
+    store.placeSchedule(dup.id, SD.d3, 630, 'place'); // 10:30 与 10:00-11:00 重叠
+    expect(dup.confirmed).toBe(false);
+  });
+
+  it('手动勾选/取消；E6 取消回库时取消勾选', async () => {
+    const store = await boot();
+    // 先放一个占位日程（10:30-11:30），再放重叠日程（10:00-11:00）→ 不自动勾选
+    const [holder] = store.createSchedule({ title: '占位日程', type: 'food' });
+    store.placeSchedule(holder.id, SD.d3, 630, 'place');
+    expect(holder.confirmed).toBe(true); // 独占时段
+    const [dup] = store.createSchedule({ title: '重叠日程', type: 'food' });
+    store.placeSchedule(dup.id, SD.d3, 600, 'place');
+    expect(dup.confirmed).toBe(false); // 与占位重叠
+    store.setConfirmed(dup.id, true);
+    expect(dup.confirmed).toBe(true);
+    store.cancelSchedule(dup.id);
+    expect(dup.confirmed).toBe(false);
+    expect(dup.date).toBeNull();
+  });
+
+  it('E7 表单上表（未放置 → 已放置，无重叠）自动勾选；E8 清空日期取消勾选', async () => {
+    const store = await boot();
+    const [s] = store.createSchedule({ title: '表单上表', type: 'sight' });
+    store.updateSchedule(s.id, { title: s.title, type: s.type, date: SD.d2, startTime: '14:00', durationMin: 60 });
+    expect(s.confirmed).toBe(true);
+    store.updateSchedule(s.id, { title: s.title, type: s.type, date: null, startTime: null, durationMin: 60 });
+    expect(s.confirmed).toBe(false);
+  });
+});
+
+describe('planner store · 已付金额（口径 §15）', () => {
+  it('setPaidAmount：正常/两位小数/负数归零/清空', async () => {
+    const store = await boot();
+    const s = findByTitle(store, '吃饭');
+    store.setPaidAmount(s.id, 500);
+    expect(s.paidAmount).toBe(500);
+    store.setPaidAmount(s.id, 100.555);
+    expect(a_p(s)).toBe(100.56);
+    store.setPaidAmount(s.id, -50);
+    expect(a_p(s)).toBe(0);
+    store.setPaidAmount(s.id, null);
+    expect(s.paidAmount).toBeNull();
+  });
+
+  it('已删除日程不可编辑已付', async () => {
+    const store = await boot();
+    const s = findByTitle(store, '浮潜');
+    store.deleteSchedule(s.id);
+    store.setPaidAmount(s.id, 100);
+    expect(s.paidAmount).toBeNull();
+  });
+
+  function a_p(s: { paidAmount: number | null }): number {
+    return s.paidAmount!;
+  }
+});
+
+describe('planner store · 复制行程（口径 §16）', () => {
+  it('完整复制：新 ID、名称副本、paidAmount 不复制、自动切换', async () => {
+    const store = await boot();
+    const srcId = store.plans[0].id;
+    store.setPaidAmount(findByTitle(store, '吃饭').id, 300);
+    const copy = store.copyPlan(srcId)!;
+    expect(copy.name).toBe('冲绳 7 日行 副本');
+    expect(store.plans).toHaveLength(2);
+    expect(store.currentPlanId).toBe(copy.id);
+    const srcSchedules = store.schedules.filter((x) => x.planId === srcId);
+    const copySchedules = store.schedules.filter((x) => x.planId === copy.id);
+    expect(copySchedules).toHaveLength(srcSchedules.length);
+    expect(new Set(copySchedules.map((x) => x.id)).size).toBe(copySchedules.length); // ID 全新
+    // 字段保留（日期/勾选/波动），已付清空
+    const srcFood = srcSchedules.find((x) => x.title.includes('吃饭'))!;
+    const copyFood = copySchedules.find((x) => x.title.includes('吃饭'))!;
+    expect(copyFood.date).toBe(srcFood.date);
+    expect(copyFood.confirmed).toBe(srcFood.confirmed);
+    expect(copyFood.paidAmount).toBeNull();
+    // 旧行程数据不受影响
+    expect(srcFood.paidAmount).toBe(300);
   });
 });

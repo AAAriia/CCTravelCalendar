@@ -50,3 +50,15 @@ export function layoutOverlap(cards: Schedule[]): LaidOutSchedule[] {
   closeCluster();
   return out;
 }
+
+/** 两个已放置日程时间是否相交（同日由调用方保证） */
+export function timeOverlaps(
+  a: Pick<Schedule, 'startTime' | 'durationMin'>,
+  b: Pick<Schedule, 'startTime' | 'durationMin'>,
+): boolean {
+  const as = hhToMin(a.startTime!);
+  const ae = as + a.durationMin;
+  const bs = hhToMin(b.startTime!);
+  const be = bs + b.durationMin;
+  return as < be && bs < ae;
+}

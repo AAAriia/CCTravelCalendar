@@ -1,6 +1,9 @@
 /** 日程类型枚举（口径文档 §2.1） */
 export type ScheduleType = 'transport' | 'hotel' | 'food' | 'sight' | 'shopping' | 'fun';
 
+/** 费用类型（预算表口径）：必须 / 可选 */
+export type ExpenseType = 'required' | 'optional';
+
 /** 日程库分组维度（口径文档 §6） */
 export type GroupBy = 'type' | 'location' | 'expectedDate';
 
@@ -27,6 +30,12 @@ export interface Schedule {
   /** 金额波动（元），可负：正数=可能上浮，负数=可能下浮；空 = 无波动。
    *  区间 = [price + min(v,0), price + max(v,0)]，下限不低于 0（口径 §8） */
   priceVariance: number | null;
+  /** 已确认（勾选）：视为敲定的行程；放置到无重叠时段时自动勾选（口径 §14） */
+  confirmed: boolean;
+  /** 费用类型：必须 / 可选（默认必须），详情与预算表可编辑 */
+  expenseType: ExpenseType;
+  /** 已付金额（元），≥0；仅在预算表查看与编辑（口径 §15） */
+  paidAmount: number | null;
   /** 备注，≤200 字，仅详情展示 */
   note: string;
   /** 软删除时间戳；null = 未删除。回收站条目不参与日历/库/分组/统计 */

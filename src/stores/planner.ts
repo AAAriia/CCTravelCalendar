@@ -19,6 +19,7 @@ import {
 } from '@/utils/datetime';
 import { fmtShortWeek } from '@/utils/format';
 import { priceRange } from '@/utils/price';
+import { timeOverlaps } from '@/utils/layout';
 
 export interface ScheduleGroup {
   key: string;
@@ -47,15 +48,24 @@ export const usePlannerStore = defineStore('planner', () => {
   /* ---------------- 初始化与持久化（口径 §9） ---------------- */
   async function init(): Promise<void> {
     if (loaded.value) return;
-    let data = await repo.load();
-    if (!data || data.plans.length === 0) {
-      data = buildSeedData();
-      await repo.save(data);
-    }
+    const loadedData = await repo.load();
+    const freshSeeded = !loadedData || loadedData.plans.length === 0;
+    const data = freshSeeded ? buildSeedData() : loadedData;
+    if (freshSeeded) await repo.save(data);
     plans.value = data.plans;
     schedules.value = data.schedules;
     currentPlanId.value = data.lastPlanId ?? data.plans[0]!.id;
+    if (freshSeeded) jumpToFirstPlacedWeek();
     loaded.value = true;
+  }
+
+  /** 定位到最早已放置日程所在周（首次播种/重置后，让测试数据立即可见） */
+  function jumpToFirstPlacedWeek(): void {
+    const dates = schedules.value
+      .filter((s) => s.deletedAt === null && s.date !== null)
+      .map((s) => s.date!)
+      .sort();
+    if (dates.length) weekStartIso.value = isoOf(mondayOf(parseISO(dates[0]!)));
   }
 
   function persist(): void {
@@ -190,6 +200,7 @@ export const usePlannerStore = defineStore('planner', () => {
     expectedDate?: string | null;
     price?: number | null;
     priceVariance?: number | null;
+    expenseType?: 'required' | 'optional';
     note?: string;
   }): [Schedule, FormWarn] {
     let warn: FormWarn = null;
@@ -221,12 +232,16 @@ export const usePlannerStore = defineStore('planner', () => {
       expectedDate: patch.expectedDate ?? null,
       price: patch.price ?? null,
       priceVariance: patch.priceVariance ?? null,
+      expenseType: patch.expenseType ?? 'required',
+      paidAmount: null,
+      confirmed: false,
       note: (patch.note ?? '').slice(0, 200),
       deletedAt: null,
       createdAt: now,
       updatedAt: now,
     };
     schedules.value.push(s);
+    autoConfirmIfSolo(s); // E2：直接上表且时段无重叠 → 自动勾选（口径 §14）
     persist();
     return [s, warn];
   }
@@ -238,9 +253,19 @@ export const usePlannerStore = defineStore('planner', () => {
     const clamped = clampStart(startMin, s.durationMin); // 日末截断：保持时长
     s.date = date;
     s.startTime = minToHH(clamped);
+    autoConfirmIfSolo(s); // 放到无重叠时段 → 自动勾选（口径 §14）
     touch(s);
     persist();
     return s;
+  }
+
+  /** 自动勾选：目标时段仅此一个日程时置 confirmed=true；有重叠不勾、已勾不重复 */
+  function autoConfirmIfSolo(s: Schedule): void {
+    if (s.confirmed || !isPlaced(s) || s.deletedAt !== null) return;
+    const solo = !activeSchedules.value.some(
+      (o) => o.id !== s.id && o.date === s.date && timeOverlaps(s, o),
+    );
+    if (solo) s.confirmed = true;
   }
 
   /** E5 边缘拖拽调时长（调用方已按口径钳制）；上边缘=结束不变、下边缘=仅改时长 */
@@ -263,6 +288,7 @@ export const usePlannerStore = defineStore('planner', () => {
     s.expectedDate = s.date; // 回写：多次取消取最近一次实际日期
     s.date = null;
     s.startTime = null;
+    s.confirmed = false; // 回库待重排，取消勾选（口径 §14）
     touch(s);
     persist();
     return lastDate;
@@ -281,6 +307,7 @@ export const usePlannerStore = defineStore('planner', () => {
       expectedDate?: string | null;
       price?: number | null;
       priceVariance?: number | null;
+      expenseType?: 'required' | 'optional';
       note?: string;
     },
   ): [Schedule | null, FormWarn] {
@@ -301,15 +328,18 @@ export const usePlannerStore = defineStore('planner', () => {
     s.expectedDate = patch.expectedDate ?? null;
     s.price = patch.price ?? null;
     s.priceVariance = patch.priceVariance ?? null;
+    s.expenseType = patch.expenseType ?? 'required';
     s.note = (patch.note ?? '').slice(0, 200);
     if (date && startTime) {
       const c = clampPlacement(hhToMin(floorToSlot(startTime)), s.durationMin);
       s.date = date;
       s.startTime = minToHH(c.startMin);
       s.durationMin = c.durMin;
+      autoConfirmIfSolo(s); // E7 未放置 → 已放置且无重叠 → 自动勾选
     } else {
       s.date = null;
       s.startTime = null;
+      s.confirmed = false; // E8 回库 → 取消勾选
     }
     touch(s);
     persist();
@@ -346,7 +376,46 @@ export const usePlannerStore = defineStore('planner', () => {
     return true;
   }
 
+  /* ---------------- 勾选与已付（口径 §14/§15） ---------------- */
+
+  function setConfirmed(id: string, v: boolean): void {
+    const s = byId(id);
+    if (!s || s.deletedAt !== null) return;
+    s.confirmed = v;
+    touch(s);
+    persist();
+  }
+
+  /** 已付金额：仅预算表编辑 */
+  function setPaidAmount(id: string, v: number | null): void {
+    const s = byId(id);
+    if (!s || s.deletedAt !== null) return;
+    s.paidAmount = v == null || Number.isNaN(v) ? null : Math.max(0, Math.round(v * 100) / 100);
+    touch(s);
+    persist();
+  }
+
   /* ---------------- 行程管理 ---------------- */
+
+  /** 复制行程：完整复制日程（新 ID），已付金额不复制（避免已付合计翻倍，口径 §16） */
+  function copyPlan(id: string): Plan | null {
+    const src = plans.value.find((p) => p.id === id);
+    if (!src) return null;
+    const now = Date.now();
+    const copy: Plan = {
+      id: uid('plan'),
+      name: `${src.name} 副本`.slice(0, 30),
+      createdAt: now,
+      updatedAt: now,
+    };
+    plans.value.push(copy);
+    for (const s of schedules.value.filter((x) => x.planId === id)) {
+      schedules.value.push({ ...s, id: uid(), planId: copy.id, paidAmount: null, createdAt: now, updatedAt: now });
+    }
+    currentPlanId.value = copy.id;
+    persist();
+    return copy;
+  }
 
   function createPlan(name: string): Plan {
     const now = Date.now();
@@ -417,6 +486,7 @@ export const usePlannerStore = defineStore('planner', () => {
     groupBy.value = 'type';
     collapsed.value = new Set();
     await repo.save(data);
+    jumpToFirstPlacedWeek();
   }
 
   return {
@@ -451,11 +521,15 @@ export const usePlannerStore = defineStore('planner', () => {
     deleteSchedule,
     restoreSchedule,
     purgeSchedule,
+    // 勾选与已付
+    setConfirmed,
+    setPaidAmount,
     // 行程
     createPlan,
     renamePlan,
     removePlan,
     switchPlan,
+    copyPlan,
     // 视图
     prevWeek,
     nextWeek,

@@ -11,5 +11,6 @@ export interface FormPatch {
   expectedDate: string | null;
   price: number | null;
   priceVariance: number | null;
+  expenseType: 'required' | 'optional';
   note: string;
 }

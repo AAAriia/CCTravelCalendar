@@ -24,6 +24,23 @@
               </button>
             </div>
           </div>
+          <div class="f-2col">
+            <div class="f-row">
+              <label>费用类型</label>
+              <div class="chips">
+                <button type="button" class="chip" :class="{ active: form.expenseType === 'required' }" @click="form.expenseType = 'required'">必须</button>
+                <button type="button" class="chip" :class="{ active: form.expenseType === 'optional' }" @click="form.expenseType = 'optional'">可选</button>
+              </div>
+            </div>
+            <div class="f-row">
+              <label>确认状态<span class="hint-inline">勾选 = 敲定的行程</span></label>
+              <div class="chips">
+                <button type="button" class="chip ok-chip" :class="{ active: form.confirmed }" @click="toggleConfirmed">
+                  {{ form.confirmed ? '✓ 已确认' : '未确认（点击勾选）' }}
+                </button>
+              </div>
+            </div>
+          </div>
           <div class="f-row">
             <label>地点</label>
             <input v-model.trim="form.location" type="text" maxlength="30" placeholder="如：湖滨码头" />
@@ -81,6 +98,8 @@ import type { Schedule, ScheduleType } from '@/types';
 import type { FormPatch } from '@/types/form';
 import { DUR_OPTIONS, TYPES } from '@/constants';
 import { durLabel } from '@/utils/format';
+import { usePlannerStore } from '@/stores/planner';
+import { toast } from '@/composables/useToast';
 
 const props = defineProps<{
   visible: boolean;
@@ -92,6 +111,7 @@ const emit = defineEmits<{
   delete: [id: string];
 }>();
 
+const store = usePlannerStore();
 const creating = ref(false);
 const errTitle = ref('');
 const form = reactive({
@@ -104,6 +124,8 @@ const form = reactive({
   expectedDate: '',
   price: null as number | null,
   priceVariance: null as number | null,
+  expenseType: 'required' as 'required' | 'optional',
+  confirmed: false,
   note: '',
 });
 
@@ -124,11 +146,20 @@ watch(
       expectedDate: s?.expectedDate ?? '',
       price: s?.price ?? null,
       priceVariance: s?.priceVariance ?? null,
+      expenseType: s?.expenseType ?? 'required',
+      confirmed: s?.confirmed ?? false,
       note: s?.note ?? '',
     });
   },
   { immediate: true },
 );
+
+function toggleConfirmed(): void {
+  if (!props.schedule) return;
+  form.confirmed = !form.confirmed;
+  store.setConfirmed(props.schedule.id, form.confirmed);
+  toast(form.confirmed ? '已标记为已确认' : '已取消确认');
+}
 
 function save(): void {
   const title = form.title.trim();
@@ -151,6 +182,7 @@ function save(): void {
     price: form.price === null || Number.isNaN(form.price) ? null : Math.max(0, form.price),
     priceVariance:
       form.priceVariance === null || Number.isNaN(form.priceVariance) ? null : form.priceVariance,
+    expenseType: form.expenseType,
     note: form.note,
   });
 }
