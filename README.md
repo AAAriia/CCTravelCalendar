@@ -2,7 +2,7 @@
 
 以**周视图日程表 + 日程库**为核心的旅行计划工具：把候选日程先入库，拖拽排期、拖边缘调时长、一键取消回库（预计日期自动回写为上次实际日期）。
 
-**在线体验**：<https://aaaaria.github.io/CCTravelCalendar/>（GitHub Pages 自动部署）
+**在线体验**：<https://aaariia.github.io/CCTravelCalendar/>（GitHub Pages 自动部署）
 
 规则依据：[`docs/PRD.md`](docs/PRD.md) 与 [`docs/口径文档.md`](docs/口径文档.md)（字段 / 状态机 / 交互与计算口径的唯一规则源）。
 交互原型见 [`docs/原型.html`](docs/原型.html)（单文件，可直接打开）。
