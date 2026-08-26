@@ -66,9 +66,15 @@
               <label>预估价格（元）</label>
               <input v-model.number="form.price" type="number" min="0" step="0.01" placeholder="选填" />
             </div>
-            <div class="f-row">
-              <label>金额波动（元）<span class="hint-inline">正=可能上浮 / 负=可能下浮</span></label>
-              <input v-model.number="form.priceVariance" type="number" step="0.01" placeholder="选填，如 500 或 -220" />
+            <div class="f-2col">
+              <div class="f-row">
+                <label>上浮幅度（元）<span class="hint-inline">可能涨价</span></label>
+                <input v-model.number="form.varianceUp" type="number" min="0" step="0.01" placeholder="选填，如 500" />
+              </div>
+              <div class="f-row">
+                <label>下浮幅度（元）<span class="hint-inline">可能降价</span></label>
+                <input v-model.number="form.varianceDown" type="number" min="0" step="0.01" placeholder="选填，如 220" />
+              </div>
             </div>
           </div>
           <div class="f-row">
@@ -123,7 +129,8 @@ const form = reactive({
   durationMin: 60,
   expectedDate: '',
   price: null as number | null,
-  priceVariance: null as number | null,
+  varianceUp: null as number | null,
+  varianceDown: null as number | null,
   expenseType: 'required' as 'required' | 'optional',
   confirmed: false,
   note: '',
@@ -145,7 +152,8 @@ watch(
       durationMin: s?.durationMin ?? 60,
       expectedDate: s?.expectedDate ?? '',
       price: s?.price ?? null,
-      priceVariance: s?.priceVariance ?? null,
+      varianceUp: s?.varianceUp ?? null,
+      varianceDown: s?.varianceDown ?? null,
       expenseType: s?.expenseType ?? 'required',
       confirmed: s?.confirmed ?? false,
       note: s?.note ?? '',
@@ -180,8 +188,9 @@ function save(): void {
     durationMin: form.durationMin,
     expectedDate: form.expectedDate || null,
     price: form.price === null || Number.isNaN(form.price) ? null : Math.max(0, form.price),
-    priceVariance:
-      form.priceVariance === null || Number.isNaN(form.priceVariance) ? null : form.priceVariance,
+    varianceUp: form.varianceUp === null || Number.isNaN(form.varianceUp) ? null : Math.max(0, form.varianceUp),
+    varianceDown:
+      form.varianceDown === null || Number.isNaN(form.varianceDown) ? null : Math.max(0, form.varianceDown),
     expenseType: form.expenseType,
     note: form.note,
   });

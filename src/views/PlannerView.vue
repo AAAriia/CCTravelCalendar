@@ -2,7 +2,7 @@
   <div class="app">
     <TopBar
       @manage-plans="planModal = true"
-      @budget="budgetModal = true"
+      @budget="goBudget"
       @import-export="ioModal = true"
       @trash="trashModal = true"
       @reset="askReset"
@@ -55,7 +55,6 @@
     <PlanManagerModal :visible="planModal" @close="planModal = false" @remove-plan="askRemovePlan" />
     <TrashModal :visible="trashModal" @close="trashModal = false" @purge="askPurge" />
     <ImportExportModal :visible="ioModal" @close="ioModal = false" />
-    <BudgetModal :visible="budgetModal" @close="budgetModal = false" />
     <PlaceSheet
       :visible="place.visible"
       :schedule="place.target"
@@ -87,7 +86,6 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import PlanManagerModal from '@/components/PlanManagerModal.vue';
 import TrashModal from '@/components/TrashModal.vue';
 import ImportExportModal from '@/components/ImportExportModal.vue';
-import BudgetModal from '@/components/BudgetModal.vue';
 import PlaceSheet from '@/components/PlaceSheet.vue';
 
 const store = usePlannerStore();
@@ -105,7 +103,6 @@ const confirmAction = ref<(() => void) | null>(null);
 const planModal = ref(false);
 const trashModal = ref(false);
 const ioModal = ref(false);
-const budgetModal = ref(false);
 const place = reactive<{ visible: boolean; target: Schedule | null }>({ visible: false, target: null });
 const libDrawer = ref(false);
 const mobileDay = ref(Math.min(6, Math.max(0, ((new Date().getDay() + 6) % 7)))); // 默认选中今天
@@ -248,6 +245,10 @@ onMounted(() => {
   installDragSystem();
   setDragUiHooks(openDetail);
 });
+
+function goBudget(): void {
+  void router.push({ name: 'budget', params: { planId: store.currentPlanId! } });
+}
 
 function scrollCalendarTo(top: number): void {
   calRef.value?.scrollTo(top);

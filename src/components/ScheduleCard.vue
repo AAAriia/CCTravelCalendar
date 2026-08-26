@@ -61,7 +61,7 @@ const cardStyle = computed(() => {
 });
 
 const meta = computed(() =>
-  [props.schedule.location, fmtPriceRange(props.schedule.price, props.schedule.priceVariance)]
+  [props.schedule.location, fmtPriceRange(props.schedule.price, props.schedule.varianceUp, props.schedule.varianceDown)]
     .filter(Boolean)
     .join(' · '),
 );

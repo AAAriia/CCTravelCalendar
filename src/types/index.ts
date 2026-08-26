@@ -27,9 +27,10 @@ export interface Schedule {
   expectedDate: string | null;
   /** 预估价格（元），≥0，空 = 不计入统计 */
   price: number | null;
-  /** 金额波动（元），可负：正数=可能上浮，负数=可能下浮；空 = 无波动。
-   *  区间 = [price + min(v,0), price + max(v,0)]，下限不低于 0（口径 §8） */
-  priceVariance: number | null;
+  /** 上浮幅度（元，≥0）；空 = 无上浮。区间口径见 §8 */
+  varianceUp: number | null;
+  /** 下浮幅度（元，≥0）；空 = 无下浮。区间 = [price - 下浮, price + 上浮]，下限不低于 0 */
+  varianceDown: number | null;
   /** 已确认（勾选）：视为敲定的行程；放置到无重叠时段时自动勾选（口径 §14） */
   confirmed: boolean;
   /** 费用类型：必须 / 可选（默认必须），详情与预算表可编辑 */

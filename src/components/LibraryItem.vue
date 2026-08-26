@@ -17,6 +17,7 @@
           @click.stop="store.setConfirmed(schedule.id, !schedule.confirmed)"
         >✓</button>
         <div class="lib-title">{{ schedule.title }}</div>
+        <button class="lib-copy" type="button" title="复制日程（进库待排期）" @click.stop="onCopy">⧉</button>
       </div>
       <div class="lib-sub">
         <template v-if="schedule.location">{{ schedule.location }}</template>
@@ -35,6 +36,7 @@ import { isPlaced } from '@/types';
 import { TYPE_MAP } from '@/constants';
 import { fmtShort } from '@/utils/format';
 import { fmtPriceRange } from '@/utils/price';
+import { toast } from '@/composables/useToast';
 import { beginLibDrag, suppressClick } from '@/composables/useDragSchedule';
 import { usePlannerStore } from '@/stores/planner';
 
@@ -45,10 +47,15 @@ const emit = defineEmits<{ open: [id: string] }>();
 const placed = computed(() => isPlaced(props.schedule));
 const color = TYPE_MAP[props.schedule.type].color;
 const priceRangeText = computed(() =>
-  props.schedule.price == null && props.schedule.priceVariance == null
+  props.schedule.price == null && props.schedule.varianceUp == null && props.schedule.varianceDown == null
     ? ''
-    : fmtPriceRange(props.schedule.price, props.schedule.priceVariance),
+    : fmtPriceRange(props.schedule.price, props.schedule.varianceUp, props.schedule.varianceDown),
 );
+
+function onCopy(): void {
+  const copy = store.duplicateSchedule(props.schedule.id);
+  if (copy) toast(`已复制「${copy.title.slice(0, 12)}」到日程库`);
+}
 
 function onPointerDown(e: PointerEvent): void {
   beginLibDrag(e, props.schedule, (e.currentTarget as HTMLElement));

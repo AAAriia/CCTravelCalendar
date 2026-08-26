@@ -56,11 +56,12 @@ describe('normalizeSchedule 脏数据防御', () => {
     expect(s.expectedDate).toBe('2026-08-27');
   });
 
-  it('priceVariance：可正可负，非法回退 null', () => {
-    expect(normalizeSchedule({ priceVariance: 500 }, 'p1').priceVariance).toBe(500);
-    expect(normalizeSchedule({ priceVariance: -220.5 }, 'p1').priceVariance).toBe(-220.5);
-    expect(normalizeSchedule({ priceVariance: 'abc' }, 'p1').priceVariance).toBeNull();
-    expect(normalizeSchedule({}, 'p1').priceVariance).toBeNull();
+  it('varianceUp/Down：≥0 两位小数，非法回退 null', () => {
+    expect(normalizeSchedule({ varianceUp: 500 }, 'p1').varianceUp).toBe(500);
+    expect(normalizeSchedule({ varianceDown: 220.5 }, 'p1').varianceDown).toBe(220.5);
+    expect(normalizeSchedule({ varianceUp: 'abc' }, 'p1').varianceUp).toBeNull();
+    expect(normalizeSchedule({}, 'p1').varianceUp).toBeNull();
+    expect(normalizeSchedule({}, 'p1').varianceDown).toBeNull();
   });
 
   it('uid 唯一性', () => {

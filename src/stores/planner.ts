@@ -115,7 +115,7 @@ export const usePlannerStore = defineStore('planner', () => {
     let min = 0;
     let max = 0;
     for (const s of placedInWeek.value) {
-      const r = priceRange(s.price, s.priceVariance);
+      const r = priceRange(s.price, s.varianceUp, s.varianceDown);
       min += r.min;
       max += r.max;
     }
@@ -199,7 +199,8 @@ export const usePlannerStore = defineStore('planner', () => {
     durationMin?: number;
     expectedDate?: string | null;
     price?: number | null;
-    priceVariance?: number | null;
+    varianceUp?: number | null;
+    varianceDown?: number | null;
     expenseType?: 'required' | 'optional';
     note?: string;
   }): [Schedule, FormWarn] {
@@ -231,7 +232,8 @@ export const usePlannerStore = defineStore('planner', () => {
       durationMin,
       expectedDate: patch.expectedDate ?? null,
       price: patch.price ?? null,
-      priceVariance: patch.priceVariance ?? null,
+      varianceUp: patch.varianceUp ?? null,
+      varianceDown: patch.varianceDown ?? null,
       expenseType: patch.expenseType ?? 'required',
       paidAmount: null,
       confirmed: false,
@@ -306,7 +308,8 @@ export const usePlannerStore = defineStore('planner', () => {
       durationMin?: number;
       expectedDate?: string | null;
       price?: number | null;
-      priceVariance?: number | null;
+      varianceUp?: number | null;
+      varianceDown?: number | null;
       expenseType?: 'required' | 'optional';
       note?: string;
     },
@@ -327,7 +330,8 @@ export const usePlannerStore = defineStore('planner', () => {
     s.durationMin = patch.durationMin ?? s.durationMin;
     s.expectedDate = patch.expectedDate ?? null;
     s.price = patch.price ?? null;
-    s.priceVariance = patch.priceVariance ?? null;
+    s.varianceUp = patch.varianceUp ?? null;
+    s.varianceDown = patch.varianceDown ?? null;
     s.expenseType = patch.expenseType ?? 'required';
     s.note = (patch.note ?? '').slice(0, 200);
     if (date && startTime) {
@@ -393,6 +397,27 @@ export const usePlannerStore = defineStore('planner', () => {
     s.paidAmount = v == null || Number.isNaN(v) ? null : Math.max(0, Math.round(v * 100) / 100);
     touch(s);
     persist();
+  }
+
+  /** 复制日程（库内）：新条目进库未放置；日期/时间/勾选/已付清空，其余字段保留（口径 §17） */
+  function duplicateSchedule(id: string): Schedule | null {
+    const src = byId(id);
+    if (!src || src.deletedAt !== null) return null;
+    const now = Date.now();
+    const copy: Schedule = {
+      ...src,
+      id: uid(),
+      title: `${src.title} 副本`.slice(0, 30),
+      date: null,
+      startTime: null,
+      confirmed: false,
+      paidAmount: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    schedules.value.push(copy);
+    persist();
+    return copy;
   }
 
   /* ---------------- 行程管理 ---------------- */
@@ -524,6 +549,7 @@ export const usePlannerStore = defineStore('planner', () => {
     // 勾选与已付
     setConfirmed,
     setPaidAmount,
+    duplicateSchedule,
     // 行程
     createPlan,
     renamePlan,

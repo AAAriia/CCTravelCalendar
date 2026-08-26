@@ -3,6 +3,7 @@ import { createPinia } from 'pinia';
 import { createRouter, createWebHashHistory } from 'vue-router';
 import App from './App.vue';
 import PlannerView from './views/PlannerView.vue';
+import BudgetPage from './views/BudgetPage.vue';
 import { usePlannerStore } from './stores/planner';
 import './styles/base.css';
 
@@ -18,6 +19,7 @@ const router = createRouter({
   routes: [
     { path: '/', redirect: () => `/plan/${store.currentPlanId}` },
     { path: '/plan/:planId', name: 'plan', component: PlannerView },
+    { path: '/plan/:planId/budget', name: 'budget', component: BudgetPage },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 });

@@ -43,10 +43,10 @@ const csvCell = (v: string | number | null): string => {
 /** 当前行程 CSV 导出（Excel 兼容：UTF-8 BOM） */
 export function buildPlanCsv(plans: Plan[], schedules: Schedule[]): string {
   const planNames = new Map(plans.map((p) => [p.id, p.name]));
-  const header = ['行程', '事项名称', '类型', '日期', '开始时间', '结束时间', '时长(分钟)', '地点', '预计日期', '预估价格', '金额波动', '区间下限', '区间上限', '费用类型', '已确认', '已付金额', '状态', '备注'];
+  const header = ['行程', '事项名称', '类型', '日期', '开始时间', '结束时间', '时长(分钟)', '地点', '预计日期', '预估价格', '下浮', '上浮', '区间下限', '区间上限', '费用类型', '已确认', '已付金额', '状态', '备注'];
   const rows = schedules.map((s) => {
     const end = s.startTime ? minToHH(Number(s.startTime.slice(0, 2)) * 60 + Number(s.startTime.slice(3)) + s.durationMin) : '';
-    const range = priceRange(s.price, s.priceVariance);
+    const range = priceRange(s.price, s.varianceUp, s.varianceDown);
     return [
       planNames.get(s.planId) ?? '',
       s.title,
@@ -58,9 +58,10 @@ export function buildPlanCsv(plans: Plan[], schedules: Schedule[]): string {
       s.location,
       s.expectedDate ?? '',
       s.price ?? '',
-      s.priceVariance ?? '',
-      s.price == null && s.priceVariance == null ? '' : range.min,
-      s.price == null && s.priceVariance == null ? '' : range.max,
+      s.varianceDown ?? '',
+      s.varianceUp ?? '',
+      s.price == null && s.varianceUp == null && s.varianceDown == null ? '' : range.min,
+      s.price == null && s.varianceUp == null && s.varianceDown == null ? '' : range.max,
       s.expenseType === 'optional' ? '可选' : '必须',
       s.confirmed ? '是' : '否',
       s.paidAmount ?? '',
@@ -153,4 +154,38 @@ export function applyImport(
     }
   }
   return { ok: true, report };
+}
+
+/**
+ * 预算表 CSV（口径 §15）：导出当前筛选下的日程，列与预算页面一致。
+ */
+export function buildBudgetCsv(planName: string, items: Schedule[]): string {
+  const header = ['事项名称', '类型', '费用类型', '日期', '开始时间', '结束时间', '地点', '预估价格', '下浮', '上浮', '区间下限', '区间上限', '已付金额', '确认状态', '状态', '备注'];
+  const rows = items.map((s) => {
+    const range = priceRange(s.price, s.varianceUp, s.varianceDown);
+    const end = s.startTime ? minToHH(Number(s.startTime.slice(0, 2)) * 60 + Number(s.startTime.slice(3)) + s.durationMin) : '';
+    const hasPrice = s.price != null || s.varianceUp != null || s.varianceDown != null;
+    return [
+      s.title,
+      TYPE_MAP[s.type].name,
+      s.expenseType === 'optional' ? '可选' : '必须',
+      s.date ?? '',
+      s.startTime ?? '',
+      end,
+      s.location,
+      s.price ?? '',
+      s.varianceDown ?? '',
+      s.varianceUp ?? '',
+      hasPrice ? range.min : '',
+      hasPrice ? range.max : '',
+      s.paidAmount ?? '',
+      s.confirmed ? '已确认' : '未确认',
+      s.date ? '已放置' : '未放置',
+      s.note,
+    ].map(csvCell).join(',');
+  });
+  // UTF-8 BOM（Excel 兼容）+ CRLF
+  const BOM = String.fromCharCode(0xfeff);
+  const CRLF = String.fromCharCode(13, 10);
+  return BOM + [`预算表: ${csvCell(planName)}`, '', header.map(csvCell).join(','), ...rows].join(CRLF);
 }

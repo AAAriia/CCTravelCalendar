@@ -8,6 +8,17 @@ export const uid = (prefix = 'sch'): string =>
   `${prefix}_${Date.now().toString(36)}${(seq++).toString(36)}${Math.random().toString(36).slice(2, 5)}`;
 
 const ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** 上浮/下浮幅度（≥0，两位小数）；缺省时从旧版带符号 priceVariance 迁移（正→上浮，负→下浮） */
+function parseMag(v: unknown, legacyVariance: unknown, dir: 'up' | 'down'): number | null {
+  if (typeof v === 'number' && Number.isFinite(v) && v > 0) return Math.round(v * 100) / 100;
+  if (v === 0) return null;
+  if (typeof legacyVariance === 'number' && Number.isFinite(legacyVariance)) {
+    if (dir === 'up' && legacyVariance > 0) return Math.round(legacyVariance * 100) / 100;
+    if (dir === 'down' && legacyVariance < 0) return Math.round(-legacyVariance * 100) / 100;
+  }
+  return null;
+}
 const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 /**
@@ -41,10 +52,8 @@ export function normalizeSchedule(raw: Record<string, unknown>, planId: string):
       typeof priceRaw === 'number' && Number.isFinite(priceRaw) && priceRaw >= 0
         ? Math.round(priceRaw * 100) / 100
         : null,
-    priceVariance:
-      typeof raw.priceVariance === 'number' && Number.isFinite(raw.priceVariance)
-        ? Math.round(raw.priceVariance * 100) / 100
-        : null,
+    varianceUp: parseMag(raw.varianceUp, raw.priceVariance, 'up'),
+    varianceDown: parseMag(raw.varianceDown, raw.priceVariance, 'down'),
     confirmed: raw.confirmed === true,
     expenseType: raw.expenseType === 'optional' ? 'optional' : ('required' as ExpenseType),
     paidAmount:

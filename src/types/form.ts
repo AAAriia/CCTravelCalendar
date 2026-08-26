@@ -10,7 +10,8 @@ export interface FormPatch {
   durationMin: number;
   expectedDate: string | null;
   price: number | null;
-  priceVariance: number | null;
+  varianceUp: number | null;
+  varianceDown: number | null;
   expenseType: 'required' | 'optional';
   note: string;
 }
