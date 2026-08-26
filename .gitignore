@@ -6,3 +6,6 @@ coverage
 
 # 构建产物
 *.tsbuildinfo
+
+# 开发过程临时脚本
+scripts_patch*.py
