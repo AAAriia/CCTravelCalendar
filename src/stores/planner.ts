@@ -71,14 +71,14 @@ export const usePlannerStore = defineStore('planner', () => {
     schedules.value = data.schedules;
     currentPlanId.value = data.lastPlanId ?? data.plans[0]!.id;
     nightCollapsedUi.value = data.uiState?.nightCollapsed !== false; // 默认折叠
-    if (freshSeeded) jumpToFirstPlacedWeek();
+    jumpToFirstPlacedWeek(); // 打开/刷新：默认定位当前行程首个日程所在周（口径 §4.1b）
     loaded.value = true;
   }
 
-  /** 定位到最早已放置日程所在周（首次播种/重置后，让测试数据立即可见） */
+  /** 定位到当前行程最早已放置日程所在周（口径 §4.1b：刷新/切换行程的默认定位；无已放置回退今天所在周） */
   function jumpToFirstPlacedWeek(): void {
     const dates = schedules.value
-      .filter((s) => s.deletedAt === null && s.date !== null)
+      .filter((s) => s.deletedAt === null && s.date !== null && s.planId === currentPlanId.value)
       .map((s) => s.date!)
       .sort();
     if (dates.length) weekStartIso.value = isoOf(mondayOf(parseISO(dates[0]!)));
@@ -477,6 +477,7 @@ export const usePlannerStore = defineStore('planner', () => {
       schedules.value.push({ ...s, id: uid(), planId: copy.id, paidAmount: null, createdAt: now, updatedAt: now });
     }
     currentPlanId.value = copy.id;
+    jumpToFirstPlacedWeek();
     persist();
     return copy;
   }
@@ -506,6 +507,7 @@ export const usePlannerStore = defineStore('planner', () => {
     if (currentPlanId.value === id) {
       currentPlanId.value = plans.value[0]?.id ?? null;
       if (!currentPlanId.value && plans.value.length === 0) createPlan('我的行程');
+      jumpToFirstPlacedWeek();
     }
     persist();
     return n;
@@ -514,6 +516,7 @@ export const usePlannerStore = defineStore('planner', () => {
   function switchPlan(id: string): void {
     if (!plans.value.some((p) => p.id === id)) return;
     currentPlanId.value = id;
+    jumpToFirstPlacedWeek(); // 切换行程 → 定位该行程首个日程所在周
     persist();
   }
 

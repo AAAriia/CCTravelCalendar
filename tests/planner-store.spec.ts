@@ -47,6 +47,7 @@ describe('planner store · 初始化与种子', () => {
     setActivePinia(createPinia());
     const store2 = await boot();
     expect(store2.schedules.find((s) => s.id === food.id)!.date).toBeNull();
+    expect(store2.weekStartIso).toBe(SEED_MONDAY); // 刷新后定位行程首日程所在周（口径 §4.1b）
   });
 });
 
@@ -498,5 +499,42 @@ describe('planner store · 库内拖拽排序（口径 §6.1a）', () => {
     const store2 = await boot();
     const after = store2.groups.find((x) => x.name === '交通')!.items.map((s) => s.id);
     expect(after).toEqual([...ids].reverse());
+  });
+});
+
+describe('planner store · 刷新默认定位行程周（口径 §4.1b）', () => {
+  it('刷新后定位当前行程首个日程所在周，而非今天', async () => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    await boot(); // 首次 init 播种并持久化
+    // 数据持久化后再次 init（刷新场景）
+    setActivePinia(createPinia());
+    const store2 = await boot();
+    expect(store2.weekStartIso).toBe(SEED_MONDAY); // 2026-09-28，而非本周（8 月）
+  });
+
+  it('切换行程 → 定位该行程首个日程所在周；空行程回退保持', async () => {
+    const store = await boot();
+    expect(store.weekStartIso).toBe(SEED_MONDAY);
+    const empty = store.createPlan('空行程');
+    expect(store.weekStartIso).toBe(SEED_MONDAY); // 空行程无已放置 → 保持当前周
+    // 在空行程放置一个日程（2026-10-20 当周）
+    const [s] = store.createSchedule({ title: '未来日程', type: 'sight', date: '2026-10-20', startTime: '10:00' });
+    store.switchPlan(store.plans.find((p) => p.name === '冲绳 7 日行')!.id);
+    expect(store.weekStartIso).toBe(SEED_MONDAY);
+    store.switchPlan(empty.id);
+    expect(store.weekStartIso).toBe('2026-10-19'); // 该行程首日程所在周
+    void s;
+  });
+
+  it('定位限定当前行程：他行程的更早日程不干扰', async () => {
+    const store = await boot();
+    const other = store.createPlan('另一行程');
+    store.createSchedule({ title: '更早', type: 'sight', date: '2026-01-05', startTime: '09:00' });
+    store.switchPlan(store.plans.find((p) => p.name === '冲绳 7 日行')!.id);
+    expect(store.weekStartIso).toBe(SEED_MONDAY); // 不被 1 月的日程带偏
+    store.switchPlan(other.id);
+    expect(store.weekStartIso).toBe('2026-01-05'); // 切过去则定位其首周（周一=1/5）
+    void other;
   });
 });
