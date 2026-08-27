@@ -58,8 +58,11 @@
           </div>
           <div class="f-2col">
             <div class="f-row">
-              <label>开始时间<span class="hint-inline">5 分钟步进</span></label>
-              <input v-model="form.startTime" type="time" step="300" />
+              <label>开始时间<span class="hint-inline">5 分钟间隔</span></label>
+              <select v-model="form.startTime">
+                <option value="">— 不排期 —</option>
+                <option v-for="t in TIME_OPTIONS" :key="t" :value="t">{{ t }}</option>
+              </select>
             </div>
             <div class="f-row">
               <label>时长</label>
@@ -104,6 +107,7 @@ import { reactive, ref, watch } from 'vue';
 import type { Schedule, ScheduleType } from '@/types';
 import type { FormPatch } from '@/types/form';
 import { DUR_OPTIONS, TYPES } from '@/constants';
+import { minToHH } from '@/utils/datetime';
 import { durLabel } from '@/utils/format';
 import { usePlannerStore } from '@/stores/planner';
 import { toast } from '@/composables/useToast';
@@ -120,6 +124,8 @@ const emit = defineEmits<{
 
 const store = usePlannerStore();
 const creating = ref(false);
+/** 5 分钟间隔时间选项（00:00–23:55，口径 §4.3） */
+const TIME_OPTIONS = Array.from({ length: 288 }, (_, i) => minToHH(i * 5));
 const errTitle = ref('');
 const form = reactive({
   title: '',

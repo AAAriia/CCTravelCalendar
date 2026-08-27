@@ -83,6 +83,7 @@ export function beginCardDrag(e: PointerEvent, schedule: Schedule, cardEl: HTMLE
   if (t.closest('.card-x') || t.closest('.confirm-check')) return; // × 与勾选走原生 click
   e.preventDefault();
   if (!calDaysEl) return;
+  try { cardEl.setPointerCapture(e.pointerId); } catch { /* 保守捕获 */ }
   const r = cardEl.getBoundingClientRect();
   const zone = e.clientY - r.top <= 6 ? 't' : r.bottom - e.clientY <= 6 ? 'b' : 'm';
   ctx = {
@@ -124,6 +125,7 @@ export function beginLibDrag(e: PointerEvent, schedule: Schedule, srcEl: HTMLEle
     return;
   }
   if (!calDaysEl) return;
+  try { srcEl.setPointerCapture(e.pointerId); } catch { /* 保守捕获 */ }
   ctx = {
     kind: 'lib',
     s: schedule,
@@ -148,7 +150,7 @@ function hitTest(gx: number, gy: number, durMin: number): { colIdx: number; m: n
   const colIdx = Math.max(0, Math.min(6, Math.floor(((gx - r.left) / r.width) * 7)));
   // 凌晨折叠映射（口径 §4.1a）：折叠条区域映射回 02:00-07:00；拖拽仍按 30 分钟吸附
   const eff = usePlannerStore().nightBandCollapsed;
-  const m = Math.max(0, Math.min(1440 - durMin, Math.round(yToMin(gy - r.top, eff) / 30) * 30));
+  const m = Math.max(0, Math.min(1440 - durMin, Math.round(yToMin(gy - r.top, eff) / 5) * 5)); // 5 分钟吸附：落放与光标一致
   return { colIdx, m };
 }
 
@@ -175,6 +177,10 @@ function cleanup(): void {
   const d = ctx;
   ctx = null;
   if (!d) return;
+  try {
+    d.cardEl?.releasePointerCapture?.(d.pointerId);
+    d.srcEl?.releasePointerCapture?.(d.pointerId);
+  } catch { /* 已随指针抬起自动释放 */ }
   d.ghost?.remove();
   d.cardEl?.classList.remove('drag-src', 'resizing');
   d.srcEl?.classList.remove('drag-src');
@@ -188,6 +194,9 @@ function onMove(e: PointerEvent): void {
   if (!ctx || e.pointerId !== ctx.pointerId) return;
   const d = ctx;
   if (d.kind === 'lib-click') return; // 灰色条目：不响应移动
+  // 每帧重测坐标系：拖拽中滚动日历/窗口不再错位
+  if (calDaysEl) d.daysRect = calDaysEl.getBoundingClientRect();
+  if (d.cardEl?.parentElement) d.dayRect = d.cardEl.parentElement.getBoundingClientRect();
   if (!d.started) {
     if (Math.hypot(e.clientX - d.px, e.clientY - d.py) < 5) return;
     d.started = true;
@@ -218,7 +227,7 @@ function onMove(e: PointerEvent): void {
   } else if (d.kind === 'resize-b') {
     const st = d.orig.st;
     const eff = usePlannerStore().nightBandCollapsed;
-    const y = Math.round(yToMin(e.clientY - (d.dayRect?.top ?? 0), eff) / 30) * 30;
+    const y = Math.round(yToMin(e.clientY - (d.dayRect?.top ?? 0), eff) / 5) * 5;
     const en = Math.max(st + 30, Math.min(1440, y)); // 最小 30 / 日末截断
     d.newSt = st;
     d.newDur = en - st;
@@ -226,7 +235,7 @@ function onMove(e: PointerEvent): void {
   } else if (d.kind === 'resize-t') {
     const end = d.orig.st + d.orig.dur; // 上边缘：结束时刻不变（口径 §4.4）
     const eff = usePlannerStore().nightBandCollapsed;
-    const y = Math.round(yToMin(e.clientY - (d.dayRect?.top ?? 0), eff) / 30) * 30;
+    const y = Math.round(yToMin(e.clientY - (d.dayRect?.top ?? 0), eff) / 5) * 5;
     const st = Math.max(0, Math.min(end - 30, y));
     d.newSt = st;
     d.newDur = end - st;

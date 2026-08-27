@@ -130,7 +130,7 @@ describe('PlannerView 集成交互（jsdom 指针事件模拟）', () => {
     expect(item.classes()).not.toContain('placed');
   });
 
-  it('拖拽卡片（pointermove 超阈值）→ 按落点移动（周一 01:00）', async () => {
+  it('拖拽卡片（pointermove 超阈值）→ 按落点移动（周一 00:55，5 分钟吸附）', async () => {
     const { wrapper, store } = await mountApp();
     const food = findByTitle(store, '吃饭'); // D1 周二 18:30
     const card = wrapper.findAll('.card').find((c) => c.text()!.includes('吃饭'))!;
@@ -141,7 +141,7 @@ describe('PlannerView 集成交互（jsdom 指针事件模拟）', () => {
     firePointer('pointerup', 130, 200);
     await flushPromises();
     expect(food.date).toBe(store.weekIsoList[0]); // 移到周一
-    expect(food.startTime).toBe('01:00');
+    expect(food.startTime).toBe('00:55'); // 5 分钟吸附：54.5min → 55
     expect(useToast().msg.value).toContain('已移动到');
   });
 
