@@ -27,6 +27,9 @@
     <div class="spacer"></div>
 
     <button class="btn" title="费用预算表（与行程同步）" @click="emit('budget')">预算表</button>
+    <button class="btn" title="云端同步（GitHub Gist）" @click="emit('sync')">
+      <span class="sync-dot" :class="syncState.status"></span>云同步
+    </button>
     <button class="btn" title="备份 / 恢复数据" @click="emit('importExport')">导入导出</button>
     <button class="btn" title="已删除的日程" @click="emit('trash')">回收站</button>
     <button class="btn ghost-danger" title="清空本地修改，恢复示例数据" @click="emit('reset')">重置示例数据</button>
@@ -38,10 +41,12 @@ import { useRouter } from 'vue-router';
 import { usePlannerStore } from '@/stores/planner';
 import { weekRangeLabel } from '@/utils/format';
 import WeekPicker from '@/components/WeekPicker.vue';
+import { syncState } from '@/sync/gistSync';
 
 const emit = defineEmits<{
   managePlans: [];
   budget: [];
+  sync: [];
   importExport: [];
   trash: [];
   reset: [];
