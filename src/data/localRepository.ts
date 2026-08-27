@@ -95,6 +95,7 @@ export class LocalRepository implements DataRepository {
           })
       : [];
 
+    const rawUi = raw.uiState;
     return {
       version: SCHEMA_VERSION,
       plans,
@@ -103,6 +104,10 @@ export class LocalRepository implements DataRepository {
         typeof raw.lastPlanId === 'string' && plans.some((p) => p.id === raw.lastPlanId)
           ? raw.lastPlanId
           : (plans[0]?.id ?? null),
+      uiState:
+        typeof rawUi === 'object' && rawUi !== null
+          ? { nightCollapsed: (rawUi as { nightCollapsed?: unknown }).nightCollapsed !== false }
+          : undefined,
     };
   }
 }

@@ -10,7 +10,11 @@
 
     <div class="weeknav">
       <button class="btn" title="上一周" @click="store.prevWeek()">◀</button>
-      <span class="week-label">{{ weekRangeLabel(store.weekDays[0], store.weekDays[6]) }}</span>
+      <WeekPicker
+        :label="weekRangeLabel(store.weekDays[0], store.weekDays[6])"
+        :week-start-iso="store.weekStartIso"
+        @pick="onPickDate"
+      />
       <button class="btn" title="下一周" @click="store.nextWeek()">▶</button>
       <button class="btn" @click="goToday">今天</button>
     </div>
@@ -33,7 +37,7 @@
 import { useRouter } from 'vue-router';
 import { usePlannerStore } from '@/stores/planner';
 import { weekRangeLabel } from '@/utils/format';
-import { yOfMin } from '@/utils/datetime';
+import WeekPicker from '@/components/WeekPicker.vue';
 
 const emit = defineEmits<{
   managePlans: [];
@@ -55,7 +59,12 @@ const money = (n: number) => n.toLocaleString('zh-CN', { maximumFractionDigits: 
 
 function goToday(): void {
   store.goToday();
-  emit('scrollToday', yOfMin(7 * 60) - 88);
+  emit('scrollToday', store.morningAnchorY - 88);
+}
+
+function onPickDate(iso: string): void {
+  store.setWeekStartByDate(iso);
+  emit('scrollToday', store.morningAnchorY - 88);
 }
 </script>
 

@@ -10,11 +10,14 @@ import {
   addDays,
   clampPlacement,
   clampStart,
-  floorToSlot,
+  floorToStep,
   hhToMin,
   isoOf,
   minToHH,
+  minToY,
   mondayOf,
+  NIGHT_END,
+  NIGHT_START,
   parseISO,
 } from '@/utils/datetime';
 import { fmtShortWeek } from '@/utils/format';
@@ -42,6 +45,8 @@ export const usePlannerStore = defineStore('planner', () => {
   const weekStartIso = ref<string>(isoOf(mondayOf(new Date())));
   const groupBy = ref<GroupBy>('type');
   const collapsed = ref(new Set<string>());
+  /** 凌晨折叠偏好（口径 §4.1a）：默认折叠，展开后记忆 */
+  const nightCollapsedUi = ref(true);
 
   const repo = new LocalRepository();
 
@@ -55,6 +60,7 @@ export const usePlannerStore = defineStore('planner', () => {
     plans.value = data.plans;
     schedules.value = data.schedules;
     currentPlanId.value = data.lastPlanId ?? data.plans[0]!.id;
+    nightCollapsedUi.value = data.uiState?.nightCollapsed !== false; // 默认折叠
     if (freshSeeded) jumpToFirstPlacedWeek();
     loaded.value = true;
   }
@@ -74,6 +80,7 @@ export const usePlannerStore = defineStore('planner', () => {
       plans: plans.value,
       schedules: schedules.value,
       lastPlanId: currentPlanId.value,
+      uiState: { nightCollapsed: nightCollapsedUi.value },
     });
   }
 
@@ -121,6 +128,15 @@ export const usePlannerStore = defineStore('planner', () => {
     }
     return { count: placedInWeek.value.length, min, max };
   });
+
+  /** 凌晨带（02:00-07:00）有效折叠态：用户偏好折叠 且 本周无日程落入该时段（口径 §4.1a） */
+  const hasNightEvents = computed(() =>
+    placedInWeek.value.some((s) => {
+      const st = hhToMin(s.startTime!);
+      return st < NIGHT_END && st + s.durationMin > NIGHT_START;
+    }),
+  );
+  const nightBandCollapsed = computed(() => nightCollapsedUi.value && !hasNightEvents.value);
 
   /** 日历渲染：iso → 该日已放置日程列表 */
   const schedulesByDate = computed(() => {
@@ -215,7 +231,7 @@ export const usePlannerStore = defineStore('planner', () => {
     let startMin = 480;
     let durationMin = patch.durationMin ?? 60;
     if (date && startTime) {
-      const c = clampPlacement(hhToMin(floorToSlot(startTime)), durationMin);
+      const c = clampPlacement(hhToMin(floorToStep(startTime, 5)), durationMin);
       startMin = c.startMin;
       durationMin = c.durMin;
       startTime = minToHH(startMin);
@@ -335,7 +351,7 @@ export const usePlannerStore = defineStore('planner', () => {
     s.expenseType = patch.expenseType ?? 'required';
     s.note = (patch.note ?? '').slice(0, 200);
     if (date && startTime) {
-      const c = clampPlacement(hhToMin(floorToSlot(startTime)), s.durationMin);
+      const c = clampPlacement(hhToMin(floorToStep(startTime, 5)), s.durationMin);
       s.date = date;
       s.startTime = minToHH(c.startMin);
       s.durationMin = c.durMin;
@@ -480,6 +496,20 @@ export const usePlannerStore = defineStore('planner', () => {
 
   /* ---------------- 视图动作 ---------------- */
 
+  /** 日历选日跳周（顶栏 WeekPicker） */
+  function setWeekStartByDate(iso: string): void {
+    weekStartIso.value = isoOf(mondayOf(parseISO(iso)));
+  }
+
+  /** 折叠/展开凌晨带（记忆持久化） */
+  function setNightCollapsed(v: boolean): void {
+    nightCollapsedUi.value = v;
+    persist();
+  }
+
+  /** 07:00 定位锚点（考虑凌晨折叠后的实际像素位置） */
+  const morningAnchorY = computed(() => minToY(NIGHT_END, nightBandCollapsed.value));
+
   function prevWeek(): void {
     weekStartIso.value = isoOf(addDays(parseISO(weekStartIso.value), -7));
   }
@@ -557,6 +587,11 @@ export const usePlannerStore = defineStore('planner', () => {
     switchPlan,
     copyPlan,
     // 视图
+    nightCollapsedUi,
+    nightBandCollapsed,
+    morningAnchorY,
+    setNightCollapsed,
+    setWeekStartByDate,
     prevWeek,
     nextWeek,
     goToday,

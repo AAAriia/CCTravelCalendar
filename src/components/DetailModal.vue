@@ -45,41 +45,42 @@
             <label>地点</label>
             <input v-model.trim="form.location" type="text" maxlength="30" placeholder="如：湖滨码头" />
           </div>
+          <!-- 行分组（口径 §7.2）：日期+预计日期 / 开始时间+时长 / 价格+上浮+下浮 -->
           <div class="f-2col">
             <div class="f-row">
               <label>日期<span class="hint-inline">清空 = 移回日程库</span></label>
               <input v-model="form.date" type="date" />
             </div>
             <div class="f-row">
-              <label>开始时间<span class="hint-inline">30 分钟对齐</span></label>
-              <input v-model="form.startTime" type="time" step="1800" />
+              <label>预计日期<span class="hint-inline">仅详情显示</span></label>
+              <input v-model="form.expectedDate" type="date" />
             </div>
           </div>
           <div class="f-2col">
+            <div class="f-row">
+              <label>开始时间<span class="hint-inline">5 分钟步进</span></label>
+              <input v-model="form.startTime" type="time" step="300" />
+            </div>
             <div class="f-row">
               <label>时长</label>
               <select v-model.number="form.durationMin">
                 <option v-for="m in DUR_OPTIONS" :key="m" :value="m">{{ durLabel(m) }}</option>
               </select>
             </div>
+          </div>
+          <div class="f-3col">
             <div class="f-row">
               <label>预估价格（元）</label>
               <input v-model.number="form.price" type="number" min="0" step="0.01" placeholder="选填" />
             </div>
-            <div class="f-2col">
-              <div class="f-row">
-                <label>上浮幅度（元）<span class="hint-inline">可能涨价</span></label>
-                <input v-model.number="form.varianceUp" type="number" min="0" step="0.01" placeholder="选填，如 500" />
-              </div>
-              <div class="f-row">
-                <label>下浮幅度（元）<span class="hint-inline">可能降价</span></label>
-                <input v-model.number="form.varianceDown" type="number" min="0" step="0.01" placeholder="选填，如 220" />
-              </div>
+            <div class="f-row">
+              <label>上浮（元）</label>
+              <input v-model.number="form.varianceUp" type="number" min="0" step="0.01" placeholder="涨价" />
             </div>
-          </div>
-          <div class="f-row">
-            <label>预计日期<span class="hint-inline">仅在详情中显示</span></label>
-            <input v-model="form.expectedDate" type="date" />
+            <div class="f-row">
+              <label>下浮（元）</label>
+              <input v-model.number="form.varianceDown" type="number" min="0" step="0.01" placeholder="降价" />
+            </div>
           </div>
           <div class="f-row">
             <label>备注<span class="hint-inline">仅在详情中显示</span></label>

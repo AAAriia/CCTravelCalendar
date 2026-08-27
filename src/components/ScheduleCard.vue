@@ -28,7 +28,7 @@
 import { computed, ref } from 'vue';
 import type { Schedule } from '@/types';
 import { TYPE_MAP } from '@/constants';
-import { hhToMin, minToHH, yOfMin } from '@/utils/datetime';
+import { hhToMin, minToHH, minToY } from '@/utils/datetime';
 import { fmtPriceRange } from '@/utils/price';
 import { beginCardDrag, suppressClick } from '@/composables/useDragSchedule';
 import { usePlannerStore } from '@/stores/planner';
@@ -54,10 +54,13 @@ const priceText = computed(() =>
 
 const cardStyle = computed(() => {
   const w = 100 / (props.lanes || 1);
+  const eff = store.nightBandCollapsed; // 凌晨折叠映射（口径 §4.1a）
+  const top = minToY(st.value, eff);
+  const bottom = minToY(st.value + props.schedule.durationMin, eff);
   return {
     '--c': color.value,
-    top: `${yOfMin(st.value) + 1}px`,
-    height: `${yOfMin(props.schedule.durationMin) - 3}px`,
+    top: `${top + 1}px`,
+    height: `${bottom - top - 3}px`,
     left: `calc(${props.lane * w}% + 1px)`,
     width: `calc(${w}% - 3px)`,
     cursor: hoverCursor.value,

@@ -53,12 +53,19 @@ export interface Plan {
   updatedAt: number;
 }
 
+/** 界面偏好（跨行程持久化） */
+export interface UiState {
+  /** 凌晨时段（02:00-07:00）是否折叠；默认 true，用户展开/折叠后记忆（口径 §4.1a） */
+  nightCollapsed: boolean;
+}
+
 /** 本地持久化的全量数据（localStorage schema） */
 export interface AppData {
   version: number;
   plans: Plan[];
   schedules: Schedule[];
   lastPlanId: string | null;
+  uiState?: UiState;
 }
 
 /** 派生状态：已放置 ⇔ date 与 startTime 均非空（口径 §3.1） */

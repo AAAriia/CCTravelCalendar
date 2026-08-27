@@ -3,8 +3,11 @@ import {
   addDays,
   clampPlacement,
   clampStart,
-  floorToSlot,
+  floorToStep,
+  gridTotalH,
   hhToMin,
+  minToY,
+  yToMin,
   isoOf,
   minToHH,
   mondayOf,
@@ -47,11 +50,29 @@ describe('datetime 口径（口径文档 §4）', () => {
     expect(snapY(860)).toBe(600);
   });
 
-  it('floorToSlot：手动输入向下对齐（09:20→09:00）', () => {
-    expect(floorToSlot('09:20')).toBe('09:00');
-    expect(floorToSlot('09:30')).toBe('09:30');
-    expect(floorToSlot('23:59')).toBe('23:30');
-    expect(floorToSlot('00:00')).toBe('00:00');
+  it('floorToStep：手动输入按 5 分钟向下对齐（口径 §4.3，拖拽仍 30 分钟）', () => {
+    expect(floorToStep('09:22')).toBe('09:20');
+    expect(floorToStep('09:20')).toBe('09:20');
+    expect(floorToStep('23:59')).toBe('23:55');
+    expect(floorToStep('00:00')).toBe('00:00');
+  });
+
+  it('凌晨折叠映射（口径 §4.1a）：折叠时 02:00-07:00 压缩为 28px', () => {
+    // 展开态：线性
+    expect(minToY(0, false)).toBe(0);
+    expect(minToY(1440, false)).toBe(2112);
+    expect(gridTotalH(false)).toBe(2112);
+    // 折叠态：00-02 线性 → 折叠条 → 07-24 线性
+    expect(minToY(120, true)).toBe(176); // 02:00 顶部
+    expect(minToY(420, true)).toBe(176 + 28); // 07:00 顶部 = 204
+    expect(minToY(1440, true)).toBe(204 + 1496); // 1700
+    expect(gridTotalH(true)).toBe(1700);
+    // 折叠带内部线性映射（供落点判定）
+    expect(minToY(270, true)).toBeCloseTo(176 + 14, 5); // 04:30 → 条中部
+    // 逆映射往返
+    expect(yToMin(minToY(600, true), true)).toBe(600);
+    expect(yToMin(minToY(90, true), true)).toBe(90);
+    expect(yToMin(176 + 14, true)).toBeCloseTo(270, 5);
   });
 
   it('clampStart：拖拽落点日末截断（保持时长）', () => {

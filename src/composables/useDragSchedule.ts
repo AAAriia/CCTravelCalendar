@@ -3,7 +3,7 @@ import type { Schedule } from '@/types';
 import { isPlaced } from '@/types';
 import { TYPE_MAP } from '@/constants';
 import { usePlannerStore } from '@/stores/planner';
-import { addDays, hhToMin, isoOf, minToHH, snapY, yOfMin } from '@/utils/datetime';
+import { addDays, hhToMin, isoOf, minToHH, minToY, yToMin } from '@/utils/datetime';
 import { fmtShort } from '@/utils/format';
 import { toast } from '@/composables/useToast';
 import { useIsMobile } from '@/composables/useMediaQuery';
@@ -146,7 +146,9 @@ function hitTest(gx: number, gy: number, durMin: number): { colIdx: number; m: n
   const r = ctx!.daysRect;
   if (gx < r.left || gx > r.right || gy < r.top || gy > r.bottom - 2) return null;
   const colIdx = Math.max(0, Math.min(6, Math.floor(((gx - r.left) / r.width) * 7)));
-  const m = Math.max(0, Math.min(1440 - durMin, snapY(gy - r.top))); // 日末截断（保持时长）
+  // 凌晨折叠映射（口径 §4.1a）：折叠条区域映射回 02:00-07:00；拖拽仍按 30 分钟吸附
+  const eff = usePlannerStore().nightBandCollapsed;
+  const m = Math.max(0, Math.min(1440 - durMin, Math.round(yToMin(gy - r.top, eff) / 30) * 30));
   return { colIdx, m };
 }
 
@@ -215,13 +217,17 @@ function onMove(e: PointerEvent): void {
       : null;
   } else if (d.kind === 'resize-b') {
     const st = d.orig.st;
-    const en = Math.max(st + 30, Math.min(1440, snapY(e.clientY - (d.dayRect?.top ?? 0)))); // 最小 30 / 日末截断
+    const eff = usePlannerStore().nightBandCollapsed;
+    const y = Math.round(yToMin(e.clientY - (d.dayRect?.top ?? 0), eff) / 30) * 30;
+    const en = Math.max(st + 30, Math.min(1440, y)); // 最小 30 / 日末截断
     d.newSt = st;
     d.newDur = en - st;
     applyLiveResize(d);
   } else if (d.kind === 'resize-t') {
     const end = d.orig.st + d.orig.dur; // 上边缘：结束时刻不变（口径 §4.4）
-    const st = Math.max(0, Math.min(end - 30, snapY(e.clientY - (d.dayRect?.top ?? 0))));
+    const eff = usePlannerStore().nightBandCollapsed;
+    const y = Math.round(yToMin(e.clientY - (d.dayRect?.top ?? 0), eff) / 30) * 30;
+    const st = Math.max(0, Math.min(end - 30, y));
     d.newSt = st;
     d.newDur = end - st;
     applyLiveResize(d);
@@ -231,8 +237,9 @@ function onMove(e: PointerEvent): void {
 function applyLiveResize(d: DragCtx): void {
   const el = d.cardEl;
   if (!el || d.newSt == null || d.newDur == null) return;
-  el.style.top = `${yOfMin(d.newSt) + 1}px`;
-  el.style.height = `${yOfMin(d.newDur) - 3}px`;
+  const eff = usePlannerStore().nightBandCollapsed;
+  el.style.top = `${minToY(d.newSt, eff) + 1}px`;
+  el.style.height = `${minToY(d.newSt + d.newDur, eff) - minToY(d.newSt, eff) - 3}px`;
   const tEl = el.querySelector('.c-time');
   if (tEl) tEl.textContent = `${minToHH(d.newSt)} - ${minToHH(d.newSt + d.newDur)}`;
 }

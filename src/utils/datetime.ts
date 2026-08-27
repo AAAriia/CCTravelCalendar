@@ -67,3 +67,38 @@ export const isValidIso = (s: string): boolean =>
 
 /** 校验 HH:mm */
 export const isValidHHmm = (s: string): boolean => /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
+
+/* ===== 凌晨折叠带（口径 §4.1a）：02:00-07:00 默认折叠，展开记忆 ===== */
+export const NIGHT_START = 120; // 02:00
+export const NIGHT_END = 420; // 07:00
+export const NIGHT_COLLAPSED_H = 28; // 折叠条像素高度
+
+/** 分钟 → 像素（含折叠映射）；折叠带内部线性映射到折叠条（供落点判定） */
+export function minToY(m: number, nightCollapsed: boolean): number {
+  if (!nightCollapsed) return yOfMin(m);
+  if (m <= NIGHT_START) return yOfMin(m);
+  if (m >= NIGHT_END) return yOfMin(NIGHT_START) + NIGHT_COLLAPSED_H + yOfMin(m - NIGHT_END);
+  const ratio = (m - NIGHT_START) / (NIGHT_END - NIGHT_START);
+  return yOfMin(NIGHT_START) + ratio * NIGHT_COLLAPSED_H;
+}
+
+/** 像素 → 分钟（minToY 的逆映射；折叠条区域映射回 02:00-07:00） */
+export function yToMin(y: number, nightCollapsed: boolean): number {
+  if (!nightCollapsed) return (y / 44) * 30;
+  const yA = yOfMin(NIGHT_START);
+  const yB = yA + NIGHT_COLLAPSED_H;
+  if (y <= yA) return (y / 44) * 30;
+  if (y >= yB) return NIGHT_END + ((y - yB) / 44) * 30;
+  const ratio = (y - yA) / NIGHT_COLLAPSED_H;
+  return NIGHT_START + ratio * (NIGHT_END - NIGHT_START);
+}
+
+/** 网格总高（折叠时 = 176 + 28 + 1496 = 1700px） */
+export const gridTotalH = (nightCollapsed: boolean): number =>
+  nightCollapsed
+    ? yOfMin(NIGHT_START) + NIGHT_COLLAPSED_H + yOfMin(DAY_MIN - NIGHT_END)
+    : yOfMin(DAY_MIN);
+
+/** 手动输入向下对齐（口径 §4.3：5 分钟步进；拖拽吸附仍为 30 分钟） */
+export const floorToStep = (t: string, step = 5): string =>
+  minToHH(Math.floor(hhToMin(t) / step) * step);

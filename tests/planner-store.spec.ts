@@ -61,11 +61,11 @@ describe('planner store · 状态机 E1–E8（口径文档 §3.2）', () => {
     expect(store.activeSchedules.some((x) => x.id === s.id)).toBe(true);
   });
 
-  it('E2 新建（日期+时间）→ 直接上表，09:20 向下对齐 09:00', async () => {
+  it('E2 新建（日期+时间）→ 直接上表，时间按 5 分钟保留（09:22→09:20）', async () => {
     const store = await boot();
-    const [s] = store.createSchedule({ title: '测试 B', type: 'sight', date: mondayIso(2), startTime: '09:20' });
+    const [s] = store.createSchedule({ title: '测试 B', type: 'sight', date: mondayIso(2), startTime: '09:22' });
     expect(s.date).toBe(mondayIso(2));
-    expect(s.startTime).toBe('09:00');
+    expect(s.startTime).toBe('09:20');
   });
 
   it('新建只填日期之一 → 两者置空 + 警告（口径 §3.3）', async () => {
@@ -134,7 +134,7 @@ describe('planner store · 状态机 E1–E8（口径文档 §3.2）', () => {
     expect(s.date).toBeNull();
   });
 
-  it('E7 编辑：填日期+时间 → 已放置；时间对齐', async () => {
+  it('E7 编辑：填日期+时间 → 已放置；时间按 5 分钟保留', async () => {
     const store = await boot();
     const s = findByTitle(store, '北部交通');
     const [updated, warn] = store.updateSchedule(s.id, {
@@ -142,7 +142,7 @@ describe('planner store · 状态机 E1–E8（口径文档 §3.2）', () => {
     });
     expect(warn).toBeNull();
     expect(updated!.date).toBe(mondayIso(4));
-    expect(updated!.startTime).toBe('14:00');
+    expect(updated!.startTime).toBe('14:20'); // 5 分钟对齐保留
   });
 
   it('E8 编辑：清空日期 → 未放置且预计日期不回写（区别于 E6）', async () => {
@@ -419,5 +419,37 @@ describe('planner store · 复制行程（口径 §16）', () => {
     expect(copyFood.paidAmount).toBeNull();
     // 旧行程数据不受影响
     expect(srcFood.paidAmount).toBe(300);
+  });
+});
+
+describe('planner store · 凌晨折叠与日历跳周（口径 §4.1a）', () => {
+  it('默认折叠；展开后持久化记忆（跨刷新）', async () => {
+    const store = await boot();
+    expect(store.nightCollapsedUi).toBe(true);
+    expect(store.nightBandCollapsed).toBe(true); // 种子无凌晨日程
+    store.setNightCollapsed(false);
+    expect(store.nightBandCollapsed).toBe(false);
+    // 模拟刷新
+    setActivePinia(createPinia());
+    const store2 = await boot();
+    expect(store2.nightBandCollapsed).toBe(false); // 记忆生效
+    store2.setNightCollapsed(true); // 还原默认，避免影响其它用例（各自独立 pinia，可省）
+  });
+
+  it('本周有日程落入凌晨带 → 自动展开（防隐藏数据）', async () => {
+    const store = await boot();
+    const [s] = store.createSchedule({ title: '红眼航班', type: 'transport', date: SD.d2, startTime: '05:30', durationMin: 90 });
+    expect(store.nightBandCollapsed).toBe(false); // 自动展开
+    // 取消该日程后回到折叠
+    store.cancelSchedule(s.id);
+    expect(store.nightBandCollapsed).toBe(true);
+  });
+
+  it('setWeekStartByDate：选日跳到所在周', async () => {
+    const store = await boot();
+    store.setWeekStartByDate('2026-10-08'); // 周四 → 周一 10/5
+    expect(store.weekStartIso).toBe('2026-10-05');
+    store.goToday();
+    expect(store.weekStartIso).toBe(isoOf(mondayOf(new Date())));
   });
 });

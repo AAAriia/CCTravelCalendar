@@ -33,13 +33,13 @@ body.resizing, body.resizing * { cursor: ns-resize !important; }
 
 /* ===== 顶栏 ===== */
 .topbar {
-  height: 56px; flex: none; background: var(--panel); border-bottom: 1px solid var(--line);
-  display: flex; align-items: center; gap: 14px; padding: 0 16px;
+  min-height: 56px; flex: none; background: var(--panel); border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; padding: 6px 16px;
 }
 .brand { font-size: 17px; font-weight: 700; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
 .brand .sub { font-size: 12px; font-weight: 400; color: var(--t4); }
 .weeknav { display: flex; align-items: center; gap: 8px; margin-left: 4px; }
-.week-label { font-size: 15px; font-weight: 600; min-width: 190px; text-align: center; }
+.week-label { font-size: 15px; font-weight: 600; text-align: center; }
 .stats {
   font-size: 13px; color: var(--t3); background: #f9fafb; border: 1px solid var(--line);
   border-radius: 999px; padding: 5px 14px; white-space: nowrap;
@@ -151,6 +151,22 @@ body.resizing, body.resizing * { cursor: ns-resize !important; }
 .card.drag-src { opacity: 0.3; }
 .card.resizing { box-shadow: 0 0 0 2px var(--c); cursor: ns-resize; z-index: 6; }
 
+/* ===== 凌晨折叠（口径 §4.1a） ===== */
+.night-divider {
+  position: absolute; left: 0; right: 0; height: 28px; z-index: 3;
+  background: repeating-linear-gradient(45deg, #f8fafc 0 10px, #f1f5f9 10px 20px);
+  border-top: 1px dashed #cbd5e1; border-bottom: 1px dashed #cbd5e1;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  font-size: 11px; color: var(--t3); cursor: pointer; user-select: none;
+}
+.night-divider:hover { color: #1d4ed8; border-color: #93c5fd; }
+.night-fold-btn {
+  position: absolute; left: calc(var(--gutter) + 6px); z-index: 4;
+  border: 1px solid var(--line); background: #fff; border-radius: 999px;
+  font-size: 10px; color: var(--t4); padding: 1px 8px; cursor: pointer; font-family: inherit;
+}
+.night-fold-btn:hover { color: #1d4ed8; border-color: #93c5fd; }
+
 /* 拖拽辅助 */
 .drop-hint {
   position: absolute; border-radius: 6px; pointer-events: none; z-index: 5;
@@ -169,7 +185,7 @@ body.resizing, body.resizing * { cursor: ns-resize !important; }
 
 /* ===== 日程库 ===== */
 .aside {
-  width: 320px; flex: none; background: var(--panel); border: 1px solid var(--line);
+  width: clamp(250px, 23vw, 320px); flex: none; background: var(--panel); border: 1px solid var(--line);
   border-radius: 12px; display: flex; flex-direction: column; overflow: hidden;
 }
 .aside-h { flex: none; display: flex; align-items: center; justify-content: space-between; padding: 12px 14px 8px; }
@@ -257,6 +273,7 @@ body.resizing, body.resizing * { cursor: ns-resize !important; }
 .f-row.error input { border-color: #fca5a5; }
 .f-row.error .f-err { display: block; }
 .f-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.f-3col { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 10px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip {
   display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px;
@@ -331,5 +348,5 @@ body.resizing, body.resizing * { cursor: ns-resize !important; }
     max-height: 88dvh; display: flex; flex-direction: column;
   }
   .modal-b { max-height: none; flex: 1; overflow-y: auto; }
-  .f-2col { grid-template-columns: 1fr; gap: 0; }
+  .f-2col, .f-3col { grid-template-columns: 1fr; gap: 0; }
 }
