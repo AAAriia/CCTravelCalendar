@@ -109,12 +109,15 @@ const hintStyle = computed(() => {
   const h = dragHint.value!;
   const cols = mobileSel.value === null ? COLS : 1;
   const idx = mobileSel.value === null ? h.colIdx : 0;
+  // 投影与卡片/落点同用凌晨折叠映射（口径 §4.1a）：否则折叠态下 07:00 后投影整体下偏 ~412px
+  const top = minToY(h.startMin, effCollapsed.value);
+  const bottom = minToY(h.startMin + h.durMin, effCollapsed.value);
   return {
     '--c': h.color,
     left: `calc(100% * ${idx} / ${cols} + 2px)`,
     width: `calc(100% / ${cols} - 6px)`,
-    top: `${yOfMin(h.startMin) + 1}px`,
-    height: `${yOfMin(h.durMin) - 3}px`,
+    top: `${top + 1}px`,
+    height: `${bottom - top - 3}px`,
   };
 });
 

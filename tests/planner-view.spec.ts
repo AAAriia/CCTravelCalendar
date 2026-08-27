@@ -6,6 +6,8 @@ import PlannerView from '@/views/PlannerView.vue';
 import WeekCalendar from '@/components/WeekCalendar.vue';
 import { usePlannerStore } from '@/stores/planner';
 import { useToast } from '@/composables/useToast';
+import { dragHint } from '@/composables/useDragSchedule';
+import { minToY, yOfMin } from '@/utils/datetime';
 
 /* ---------- 测试环境基线 ---------- */
 // jsdom 无布局，getBoundingClientRect 全为 0；拖拽几何依赖视口坐标。
@@ -286,5 +288,29 @@ describe('库内排序 UI（口径 §6.1a）', () => {
     firePointer('pointerup', 1200, 300);
     await flushPromises();
     expect(usePlannerStore().schedules.length).toBe(before); // 无放置/弹窗副作用
+  });
+});
+
+describe('拖拽投影与卡片坐标一致性（回归：凌晨折叠映射）', () => {
+  it('折叠态下投影使用折叠映射，与卡片/落点一致（而非线性 yOfMin）', async () => {
+    const { wrapper, store } = await mountApp();
+    expect(store.nightBandCollapsed).toBe(true); // 种子无凌晨日程 → 折叠态
+    dragHint.value = { colIdx: 2, startMin: 900, durMin: 90, color: '#333' }; // 15:00，折叠映射下 908px
+    await flushPromises();
+    const hint = wrapper.find('.drop-hint');
+    expect(hint.exists()).toBe(true);
+    const top = parseFloat((hint.element as HTMLElement).style.top);
+    const height = parseFloat((hint.element as HTMLElement).style.height);
+    expect(top).toBeCloseTo(minToY(900, true) + 1, 6); // 909，而错误线性值为 1321
+    expect(Math.abs(top - (yOfMin(900) + 1))).toBeGreaterThan(300); // 显著区别于线性（锁语义）
+    expect(height).toBeCloseTo(minToY(990, true) - minToY(900, true) - 3, 6);
+    // 与同时段卡片位置一致：周三 09:00 浮潜卡片 top == 投影同分钟 top
+    const dive = wrapper.findAll('.card').find((c) => c.text()!.includes('浮潜'))!;
+    const diveTop = parseFloat((dive.element as HTMLElement).style.top);
+    dragHint.value = { colIdx: 3, startMin: 540, durMin: 180, color: '#333' };
+    await flushPromises();
+    const hintTop = parseFloat((wrapper.find('.drop-hint').element as HTMLElement).style.top);
+    expect(Math.abs(hintTop - diveTop)).toBeLessThanOrEqual(1); // 投影与卡片对齐（±1px 边框）
+    dragHint.value = null;
   });
 });
