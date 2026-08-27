@@ -42,7 +42,7 @@ import { usePlannerStore } from '@/stores/planner';
 
 const store = usePlannerStore();
 const props = defineProps<{ schedule: Schedule }>();
-const emit = defineEmits<{ open: [id: string] }>();
+const emit = defineEmits<{ open: [id: string]; copied: [id: string] }>();
 
 const placed = computed(() => isPlaced(props.schedule));
 const color = TYPE_MAP[props.schedule.type].color;
@@ -54,7 +54,9 @@ const priceRangeText = computed(() =>
 
 function onCopy(): void {
   const copy = store.duplicateSchedule(props.schedule.id);
-  if (copy) toast(`已复制「${copy.title.slice(0, 12)}」到日程库`);
+  if (!copy) return;
+  toast(`已复制「${copy.title.slice(0, 12)}」，可调整后排期`);
+  emit('copied', copy.id); // 直接打开新副本的详情（移动端亦然，不走放置面板）
 }
 
 function onPointerDown(e: PointerEvent): void {

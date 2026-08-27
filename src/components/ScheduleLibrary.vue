@@ -19,6 +19,7 @@
         :group="g"
         :dim="store.groupBy"
         @open="(id) => emit('open', id)"
+        @copied="(id) => emit('copied', id)"
       />
     </div>
   </div>
@@ -30,7 +31,7 @@ import { usePlannerStore } from '@/stores/planner';
 import { useIsMobile } from '@/composables/useMediaQuery';
 import LibraryGroup from './LibraryGroup.vue';
 
-const emit = defineEmits<{ create: []; open: [id: string] }>();
+const emit = defineEmits<{ create: []; open: [id: string]; copied: [id: string] }>();
 const store = usePlannerStore();
 const isMobile = useIsMobile();
 

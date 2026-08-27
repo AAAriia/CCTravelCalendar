@@ -8,7 +8,11 @@
     </div>
     <div class="grp-items">
       <template v-if="group.items.length">
-        <LibraryItem v-for="s in group.items" :key="s.id" :schedule="s" @open="(id) => emit('open', id)" />
+        <LibraryItem
+        v-for="s in group.items" :key="s.id" :schedule="s"
+        @open="(id) => emit('open', id)"
+        @copied="(id) => emit('copied', id)"
+      />
       </template>
       <div v-else class="grp-empty">暂无日程</div>
     </div>
@@ -22,7 +26,7 @@ import { usePlannerStore } from '@/stores/planner';
 import LibraryItem from './LibraryItem.vue';
 
 const props = defineProps<{ group: ScheduleGroup; dim: string }>();
-const emit = defineEmits<{ open: [id: string] }>();
+const emit = defineEmits<{ open: [id: string]; copied: [id: string] }>();
 const store = usePlannerStore();
 
 const groupKey = computed(() => `${props.dim}:${props.group.key}`);

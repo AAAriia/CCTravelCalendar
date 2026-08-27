@@ -13,7 +13,7 @@
     <template v-if="!isMobile">
       <div class="main">
         <WeekCalendar ref="calRef" @cancel="askCancel" @open="openDetail" />
-        <ScheduleLibrary @create="openCreate" @open="openDetail" />
+        <ScheduleLibrary @create="openCreate" @open="openDetail" @copied="openDetail" />
       </div>
     </template>
 
@@ -38,7 +38,7 @@
       <template v-if="libDrawer">
         <div class="drawer-mask" @click="libDrawer = false"></div>
         <div class="drawer">
-          <ScheduleLibrary @create="openCreate" @open="onMobileLibOpen" />
+          <ScheduleLibrary @create="openCreate" @open="onMobileLibOpen" @copied="openDetail" />
         </div>
       </template>
     </template>

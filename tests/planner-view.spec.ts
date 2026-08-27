@@ -228,3 +228,48 @@ describe('移动端单日视图（mobileSel 驱动，回归：日期与卡片对
     wrapper.unmount();
   });
 });
+
+describe('v1.4 修复回归：库内复制交互与卡片展示', () => {
+  it('点击 ⧉ 复制：不打开源日程详情，直接打开新副本详情', async () => {
+    const { wrapper, store } = await mountApp();
+    const before = store.schedules.length;
+    const item = wrapper.findAll('.lib-item').find((c) => c.text()!.includes('浮潜'))!;
+    const copyBtn = item.find('.lib-copy');
+    expect(copyBtn.exists()).toBe(true);
+    // 1) pointerdown 在复制按钮上不进入拖拽/点击路径（此前会误开源日程详情）
+    await copyBtn.trigger('pointerdown', elPointer('pointerdown', 1200, 300));
+    firePointer('pointerup', 1200, 300);
+    await flushPromises();
+    const modal = wrapper.findComponent({ name: 'DetailModal' });
+    expect(modal.props('visible')).toBe(false); // 源详情未被打开
+    // 2) click → 复制 + 打开新副本详情
+    await copyBtn.trigger('click');
+    await flushPromises();
+    expect(store.schedules).toHaveLength(before + 1);
+    expect(modal.props('visible')).toBe(true);
+    expect(modal.props('schedule')!.title).toContain('浮潜 副本');
+    expect(modal.props('schedule')!.price).toBe(600); // 字段保留
+    expect(modal.props('schedule')!.date).toBeNull(); // 进库未放置
+  });
+
+  it('60 分钟日程的卡片也显示价格（独立一行）', async () => {
+    const { wrapper } = await mountApp();
+    const card = wrapper.findAll('.card').find((c) => c.text()!.includes('吃饭'))!; // 60 分钟
+    expect(card.text()).toContain('¥1,200~1,500');
+    expect(card.find('.c-price').exists()).toBe(true);
+  });
+
+  it('弹窗改时间后卡片即时刷新（派生值响应式）', async () => {
+    const { wrapper, store } = await mountApp();
+    const card = wrapper.findAll('.card').find((c) => c.text()!.includes('吃饭'))!;
+    expect(card.text()).toContain('18:30');
+    const s = store.schedules.find((x) => x.title.includes('吃饭'))!;
+    store.updateSchedule(s.id, {
+      title: s.title, type: s.type, date: s.date, startTime: '20:00', durationMin: 90,
+    });
+    await flushPromises();
+    const card2 = wrapper.findAll('.card').find((c) => c.text()!.includes('吃饭'))!;
+    expect(card2.text()).toContain('20:00');
+    expect(card2.text()).toContain('20:00 - 21:30');
+  });
+});

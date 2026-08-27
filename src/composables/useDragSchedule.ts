@@ -106,6 +106,7 @@ export function beginCardDrag(e: PointerEvent, schedule: Schedule, cardEl: HTMLE
 /* ---------------- 起点：日程库条目 pointerdown ---------------- */
 export function beginLibDrag(e: PointerEvent, schedule: Schedule, srcEl: HTMLElement): void {
   if (e.button !== 0) return;
+  if ((e.target as HTMLElement).closest('.lib-copy')) return; // 复制按钮走原生 click（须在 preventDefault 之前，避免吞掉移动端 tap）
   e.preventDefault();
   if (useIsMobile().value || isPlaced(schedule)) {
     // 移动端（点选放置流程）/ 已放置条目：拦截拖拽，点击走 open 回退打开详情（口径 §4.6 / §6.3）

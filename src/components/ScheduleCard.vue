@@ -18,7 +18,8 @@
       <div class="c-title">{{ schedule.title }}</div>
     </div>
     <div class="c-time">{{ timeRange }}</div>
-    <div v-if="showMeta" class="c-meta">{{ meta }}</div>
+    <div v-if="priceText" class="c-price">{{ priceText }}</div>
+    <div v-if="schedule.location" class="c-loc">{{ schedule.location }}</div>
     <button class="card-x" type="button" title="取消日程（移回日程库）" @click.stop="emit('cancel', schedule.id)">×</button>
   </div>
 </template>
@@ -43,29 +44,25 @@ const emit = defineEmits<{ cancel: [id: string]; open: [id: string] }>();
 const el = ref<HTMLElement | null>(null);
 const hoverCursor = ref('grab');
 
-const t = TYPE_MAP[props.schedule.type];
-const st = hhToMin(props.schedule.startTime!);
-const en = st + props.schedule.durationMin;
-const timeRange = `${minToHH(st)} - ${minToHH(en)}`;
+// 全部派生值使用 computed：弹窗编辑时间/时长后卡片即时刷新（不再使用 setup 常量）
+const color = computed(() => TYPE_MAP[props.schedule.type].color);
+const st = computed(() => hhToMin(props.schedule.startTime!));
+const timeRange = computed(() => `${minToHH(st.value)} - ${minToHH(st.value + props.schedule.durationMin)}`);
+const priceText = computed(() =>
+  fmtPriceRange(props.schedule.price, props.schedule.varianceUp, props.schedule.varianceDown),
+);
 
 const cardStyle = computed(() => {
   const w = 100 / (props.lanes || 1);
   return {
-    '--c': t.color,
-    top: `${yOfMin(st) + 1}px`,
+    '--c': color.value,
+    top: `${yOfMin(st.value) + 1}px`,
     height: `${yOfMin(props.schedule.durationMin) - 3}px`,
     left: `calc(${props.lane * w}% + 1px)`,
     width: `calc(${w}% - 3px)`,
     cursor: hoverCursor.value,
   };
 });
-
-const meta = computed(() =>
-  [props.schedule.location, fmtPriceRange(props.schedule.price, props.schedule.varianceUp, props.schedule.varianceDown)]
-    .filter(Boolean)
-    .join(' · '),
-);
-const showMeta = computed(() => props.schedule.durationMin >= 90 && meta.value);
 
 function onPointerDown(e: PointerEvent): void {
   beginCardDrag(e, props.schedule, el.value!);
