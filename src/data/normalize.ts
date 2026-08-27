@@ -55,6 +55,10 @@ export function normalizeSchedule(raw: Record<string, unknown>, planId: string):
     varianceUp: parseMag(raw.varianceUp, raw.priceVariance, 'up'),
     varianceDown: parseMag(raw.varianceDown, raw.priceVariance, 'down'),
     confirmed: raw.confirmed === true,
+    sortOrder:
+      typeof raw.sortOrder === 'number' && Number.isFinite(raw.sortOrder) && raw.sortOrder >= 0
+        ? Math.floor(raw.sortOrder)
+        : null,
     expenseType: raw.expenseType === 'optional' ? 'optional' : ('required' as ExpenseType),
     paidAmount:
       typeof raw.paidAmount === 'number' && Number.isFinite(raw.paidAmount) && raw.paidAmount >= 0

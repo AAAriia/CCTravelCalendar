@@ -16,6 +16,7 @@ const mk = (id: string, startTime: string, durationMin: number): Schedule => ({
   varianceUp: null,
   varianceDown: null,
   confirmed: false,
+  sortOrder: null,
   expenseType: 'required' as const,
   paidAmount: null,
   note: '',

@@ -1,13 +1,16 @@
 <template>
   <div
     class="lib-item"
-    :class="{ placed }"
+    :class="{ placed, sorting: dragId === schedule.id, 'insert-before': insertBeforeId === schedule.id }"
     role="button"
     tabindex="0"
     :data-id="schedule.id"
     @pointerdown="onPointerDown"
     @click="onClick"
   >
+    <span
+      class="lib-grip" title="拖动排序（组内）" @pointerdown.stop="onSortStart"
+    >⠿</span>
     <span class="dot" :style="{ '--c': color }"></span>
     <div class="lib-main">
       <div class="lib-head">
@@ -41,8 +44,16 @@ import { beginLibDrag, suppressClick } from '@/composables/useDragSchedule';
 import { usePlannerStore } from '@/stores/planner';
 
 const store = usePlannerStore();
-const props = defineProps<{ schedule: Schedule }>();
-const emit = defineEmits<{ open: [id: string]; copied: [id: string] }>();
+const props = defineProps<{
+  schedule: Schedule;
+  dragId?: string | null;
+  insertBeforeId?: string | null;
+}>();
+const emit = defineEmits<{
+  open: [id: string];
+  copied: [id: string];
+  sortstart: [e: PointerEvent, id: string];
+}>();
 
 const placed = computed(() => isPlaced(props.schedule));
 const color = TYPE_MAP[props.schedule.type].color;
@@ -57,6 +68,10 @@ function onCopy(): void {
   if (!copy) return;
   toast(`已复制「${copy.title.slice(0, 12)}」，可调整后排期`);
   emit('copied', copy.id); // 直接打开新副本的详情（移动端亦然，不走放置面板）
+}
+
+function onSortStart(e: PointerEvent): void {
+  emit('sortstart', e, props.schedule.id);
 }
 
 function onPointerDown(e: PointerEvent): void {

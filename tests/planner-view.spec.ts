@@ -273,3 +273,18 @@ describe('v1.4 修复回归：库内复制交互与卡片展示', () => {
     expect(card2.text()).toContain('20:00 - 21:30');
   });
 });
+
+describe('库内排序 UI（口径 §6.1a）', () => {
+  it('条目含拖拽手柄 ⠿', async () => {
+    const { wrapper } = await mountApp();
+    const grips = wrapper.findAll('.lib-grip');
+    expect(grips.length).toBe(9);
+    // 手柄 pointerdown 不进入拖拽系统（stop 修饰符阻断条目根的 pointerdown）
+    const firstGrip = grips[0]!;
+    const before = usePlannerStore().schedules.length;
+    await firstGrip.trigger('pointerdown', elPointer('pointerdown', 1200, 300));
+    firePointer('pointerup', 1200, 300);
+    await flushPromises();
+    expect(usePlannerStore().schedules.length).toBe(before); // 无放置/弹窗副作用
+  });
+});

@@ -24,6 +24,16 @@ import { fmtShortWeek } from '@/utils/format';
 import { priceRange } from '@/utils/price';
 import { timeOverlaps } from '@/utils/layout';
 
+/** 组内排序（口径 §6.1a）：手动序号优先（小→大），未排序项按创建时间排在其后 */
+function byLibraryOrder(a: Schedule, b: Schedule): number {
+  const ka = a.sortOrder;
+  const kb = b.sortOrder;
+  if (ka != null && kb != null) return ka - kb;
+  if (ka != null) return -1;
+  if (kb != null) return 1;
+  return a.createdAt - b.createdAt;
+}
+
 export interface ScheduleGroup {
   key: string;
   name: string;
@@ -159,7 +169,7 @@ export const usePlannerStore = defineStore('planner', () => {
         key: t.k,
         name: t.name,
         color: t.color,
-        items: list.filter((s) => s.type === t.k),
+        items: list.filter((s) => s.type === t.k).slice().sort(byLibraryOrder),
       }));
     }
     if (groupBy.value === 'location') {
@@ -179,7 +189,7 @@ export const usePlannerStore = defineStore('planner', () => {
         .map(([k, items]) => ({
           key: k,
           name: k === '__none__' ? '未填写地点' : k,
-          items,
+          items: items.slice().sort(byLibraryOrder),
         }));
     }
     // expectedDate
@@ -199,7 +209,7 @@ export const usePlannerStore = defineStore('planner', () => {
       .map(([k, items]) => ({
         key: k,
         name: k === '__none__' ? '未设定' : fmtShortWeek(k),
-        items,
+        items: items.slice().sort(byLibraryOrder),
       }));
   });
 
@@ -253,6 +263,7 @@ export const usePlannerStore = defineStore('planner', () => {
       expenseType: patch.expenseType ?? 'required',
       paidAmount: null,
       confirmed: false,
+      sortOrder: null,
       note: (patch.note ?? '').slice(0, 200),
       deletedAt: null,
       createdAt: now,
@@ -412,6 +423,18 @@ export const usePlannerStore = defineStore('planner', () => {
     if (!s || s.deletedAt !== null) return;
     s.paidAmount = v == null || Number.isNaN(v) ? null : Math.max(0, Math.round(v * 100) / 100);
     touch(s);
+    persist();
+  }
+
+  /** 组内手动排序（口径 §6.1a）：按传入顺序重编 sortOrder（0..n）并持久化 */
+  function reorderGroupItems(orderedIds: string[]): void {
+    orderedIds.forEach((id, i) => {
+      const s = byId(id);
+      if (s && s.deletedAt === null) {
+        s.sortOrder = i;
+        touch(s);
+      }
+    });
     persist();
   }
 
@@ -580,6 +603,7 @@ export const usePlannerStore = defineStore('planner', () => {
     setConfirmed,
     setPaidAmount,
     duplicateSchedule,
+    reorderGroupItems,
     // 行程
     createPlan,
     renamePlan,

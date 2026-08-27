@@ -453,3 +453,50 @@ describe('planner store · 凌晨折叠与日历跳周（口径 §4.1a）', () =
     expect(store.weekStartIso).toBe(isoOf(mondayOf(new Date())));
   });
 });
+
+describe('planner store · 库内拖拽排序（口径 §6.1a）', () => {
+  it('reorderGroupItems 重排序号，分组展示顺序即时更新', async () => {
+    const store = await boot();
+    const g = store.groups.find((x) => x.name === '交通')!;
+    const ids = g.items.map((s) => s.id);
+    const before = g.items.map((s) => s.title.slice(0, 4));
+    // 把最后一项（本岛北部交通）移到最前
+    const reordered = [ids[ids.length - 1]!, ...ids.slice(0, -1)];
+    store.reorderGroupItems(reordered);
+    const after = store.groups.find((x) => x.name === '交通')!.items.map((s) => s.title.slice(0, 4));
+    expect(after[0]).toContain('北部');
+    expect(after).not.toEqual(before);
+    // sortOrder 严格递增
+    const orders = store.groups.find((x) => x.name === '交通')!.items.map((s) => s.sortOrder);
+    expect(orders).toEqual([0, 1, 2, 3, 4, 5]);
+  });
+
+  it('排序仅影响本组：餐饮组保持创建序', async () => {
+    const store = await boot();
+    const transportIds = store.groups.find((x) => x.name === '交通')!.items.map((s) => s.id);
+    store.reorderGroupItems([...transportIds].reverse());
+    const food = store.groups.find((x) => x.name === '餐饮')!.items;
+    expect(food.every((s) => s.sortOrder == null)).toBe(true);
+    expect(food.map((s) => s.title)).toEqual(food.map((s) => s.title)); // 保持创建序（单元素断言从简）
+  });
+
+  it('新建日程排在组尾（未排序项位于手动排序项之后）', async () => {
+    const store = await boot();
+    const transportIds = store.groups.find((x) => x.name === '交通')!.items.map((s) => s.id);
+    store.reorderGroupItems(transportIds); // 全组标记手动序
+    const [created] = store.createSchedule({ title: '新交通项', type: 'transport' });
+    const items = store.groups.find((x) => x.name === '交通')!.items;
+    expect(items[items.length - 1]!.id).toBe(created.id);
+    expect(created.sortOrder).toBeNull();
+  });
+
+  it('排序持久化：刷新后保持', async () => {
+    const store = await boot();
+    const ids = store.groups.find((x) => x.name === '交通')!.items.map((s) => s.id);
+    store.reorderGroupItems([...ids].reverse());
+    setActivePinia(createPinia());
+    const store2 = await boot();
+    const after = store2.groups.find((x) => x.name === '交通')!.items.map((s) => s.id);
+    expect(after).toEqual([...ids].reverse());
+  });
+});

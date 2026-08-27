@@ -6,12 +6,15 @@
       <span class="grp-cnt">{{ group.items.length }}</span>
       <span class="chev">▼</span>
     </div>
-    <div class="grp-items">
+    <div ref="listEl" class="grp-items">
       <template v-if="group.items.length">
         <LibraryItem
         v-for="s in group.items" :key="s.id" :schedule="s"
+        :drag-id="dragId"
+        :insert-before-id="group.items.length > 1 ? insertBeforeId : null"
         @open="(id) => emit('open', id)"
         @copied="(id) => emit('copied', id)"
+        @sortstart="onSortStart"
       />
       </template>
       <div v-else class="grp-empty">暂无日程</div>
@@ -20,7 +23,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
+import { useLibrarySort } from '@/composables/useLibrarySort';
 import type { ScheduleGroup } from '@/stores/planner';
 import { usePlannerStore } from '@/stores/planner';
 import LibraryItem from './LibraryItem.vue';
@@ -28,6 +32,16 @@ import LibraryItem from './LibraryItem.vue';
 const props = defineProps<{ group: ScheduleGroup; dim: string }>();
 const emit = defineEmits<{ open: [id: string]; copied: [id: string] }>();
 const store = usePlannerStore();
+
+/* 组内拖拽排序（口径 §6.1a） */
+const listEl = ref<HTMLElement | null>(null);
+const { dragId, insertBeforeId, start } = useLibrarySort(
+  () => listEl.value,
+  (orderedIds) => store.reorderGroupItems(orderedIds),
+);
+function onSortStart(e: PointerEvent, id: string): void {
+  start(e, id);
+}
 
 const groupKey = computed(() => `${props.dim}:${props.group.key}`);
 const closed = computed(() => store.collapsed.has(groupKey.value));

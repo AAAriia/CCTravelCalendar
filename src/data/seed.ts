@@ -28,6 +28,7 @@ export function buildSeedData(): AppData {
     varianceUp: null,
     varianceDown: null,
     confirmed: false,
+    sortOrder: null,
     expenseType: 'required',
     paidAmount: null,
     note: '',

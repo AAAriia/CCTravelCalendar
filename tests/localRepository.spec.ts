@@ -12,7 +12,7 @@ const sample = (over: Partial<AppData> = {}): AppData => ({
     {
       id: 's1', planId: 'p1', title: '西湖游船', type: 'sight', location: '湖滨',
       date: '2026-08-26', startTime: '09:00', durationMin: 120, expectedDate: null,
-      price: 120, varianceUp: null, varianceDown: null, confirmed: false, expenseType: 'required' as const, paidAmount: null,
+      price: 120, varianceUp: null, varianceDown: null, confirmed: false, sortOrder: null, expenseType: 'required' as const, paidAmount: null,
       note: '', deletedAt: null, createdAt: 1, updatedAt: 1,
     },
   ],
