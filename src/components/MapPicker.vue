@@ -154,6 +154,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.picker-overlay { z-index: 2100; } /* 高于详情弹窗(2000)，选点必须置顶 */
 .picker-modal { width: 560px; }
 .pk-search { display: flex; gap: 8px; margin-bottom: 8px; }
 .pk-search input {
