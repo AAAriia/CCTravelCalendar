@@ -127,6 +127,7 @@ import { minToHH } from '@/utils/datetime';
 import { durLabel } from '@/utils/format';
 import { usePlannerStore } from '@/stores/planner';
 import { toast } from '@/composables/useToast';
+import MapPicker from '@/components/MapPicker.vue';
 
 const props = defineProps<{
   visible: boolean;
