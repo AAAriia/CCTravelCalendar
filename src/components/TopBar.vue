@@ -27,6 +27,7 @@
     <div class="spacer"></div>
 
     <button class="btn" title="费用预算表（与行程同步）" @click="emit('budget')">预算表</button>
+    <button class="btn" title="地图视图（免费 OSM）" @click="emit('map')">地图</button>
     <button class="btn" title="版本历史（快照/恢复/导出）" @click="emit('versions')">版本</button>
     <button class="btn" title="云端同步（GitHub Gist）" @click="emit('sync')">
       <span class="sync-dot" :class="syncState.status"></span>云同步
@@ -49,6 +50,7 @@ const emit = defineEmits<{
   budget: [];
   sync: [];
   versions: [];
+  map: [];
   importExport: [];
   trash: [];
   reset: [];

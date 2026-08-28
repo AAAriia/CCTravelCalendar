@@ -20,6 +20,7 @@ const router = createRouter({
     { path: '/', redirect: () => `/plan/${store.currentPlanId}` },
     { path: '/plan/:planId', name: 'plan', component: PlannerView },
     { path: '/plan/:planId/budget', name: 'budget', component: BudgetPage },
+    { path: '/plan/:planId/map', name: 'map', component: () => import('./views/MapView.vue') },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 });

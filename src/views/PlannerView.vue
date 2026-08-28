@@ -5,6 +5,7 @@
       @budget="goBudget"
       @sync="syncModal = true"
       @versions="versionModal = true"
+      @map="goMap"
       @import-export="ioModal = true"
       @trash="trashModal = true"
       @reset="askReset"
@@ -258,6 +259,10 @@ onMounted(() => {
 
 function goBudget(): void {
   void router.push({ name: 'budget', params: { planId: store.currentPlanId! } });
+}
+
+function goMap(): void {
+  void router.push({ name: 'map', params: { planId: store.currentPlanId! } });
 }
 
 function scrollCalendarTo(top: number): void {
