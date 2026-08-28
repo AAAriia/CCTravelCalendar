@@ -4,6 +4,7 @@
       @manage-plans="planModal = true"
       @budget="goBudget"
       @sync="syncModal = true"
+      @versions="versionModal = true"
       @import-export="ioModal = true"
       @trash="trashModal = true"
       @reset="askReset"
@@ -57,6 +58,7 @@
     <TrashModal :visible="trashModal" @close="trashModal = false" @purge="askPurge" />
     <ImportExportModal :visible="ioModal" @close="ioModal = false" />
     <SyncModal :visible="syncModal" @close="syncModal = false" />
+    <VersionModal :visible="versionModal" @close="versionModal = false" />
     <PlaceSheet
       :visible="place.visible"
       :schedule="place.target"
@@ -90,6 +92,7 @@ import TrashModal from '@/components/TrashModal.vue';
 import ImportExportModal from '@/components/ImportExportModal.vue';
 import PlaceSheet from '@/components/PlaceSheet.vue';
 import SyncModal from '@/components/SyncModal.vue';
+import VersionModal from '@/components/VersionModal.vue';
 import { installAutoSync } from '@/sync/gistSync';
 
 const store = usePlannerStore();
@@ -108,6 +111,7 @@ const planModal = ref(false);
 const trashModal = ref(false);
 const ioModal = ref(false);
 const syncModal = ref(false);
+const versionModal = ref(false);
 const place = reactive<{ visible: boolean; target: Schedule | null }>({ visible: false, target: null });
 const libDrawer = ref(false);
 const mobileDay = ref(Math.min(6, Math.max(0, ((new Date().getDay() + 6) % 7)))); // 默认选中今天

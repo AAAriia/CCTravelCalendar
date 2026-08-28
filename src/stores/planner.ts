@@ -5,7 +5,7 @@ import { isPlaced } from '@/types';
 import { SCHEMA_VERSION, TYPES } from '@/constants';
 import { LocalRepository } from '@/data/localRepository';
 import { buildSeedData } from '@/data/seed';
-import { uid } from '@/data/normalize';
+import { normalizeSchedule, uid } from '@/data/normalize';
 import {
   addDays,
   clampPlacement,
@@ -21,6 +21,8 @@ import {
   parseISO,
 } from '@/utils/datetime';
 import { fmtShortWeek } from '@/utils/format';
+import { schedulePush as scheduleCloudPush, syncNow } from '@/sync/gistSync';
+import { listSnapshots, takeSnapshot, type Snapshot } from '@/data/snapshots';
 import { priceRange } from '@/utils/price';
 import { timeOverlaps } from '@/utils/layout';
 
@@ -85,6 +87,7 @@ export const usePlannerStore = defineStore('planner', () => {
   }
 
   function persist(): void {
+    scheduleCloudPush(); // 本地保存 → 防抖自动推送云端（口径 §18）
     void repo.save({
       version: SCHEMA_VERSION,
       plans: plans.value,
@@ -557,8 +560,65 @@ export const usePlannerStore = defineStore('planner', () => {
     collapsed.value = set;
   }
 
+  /** 当前全量数据（快照/恢复用） */
+  function currentData() {
+    return {
+      version: SCHEMA_VERSION,
+      plans: plans.value,
+      schedules: schedules.value,
+      lastPlanId: currentPlanId.value,
+    };
+  }
+
+  /** 保存版本快照（手动，可带备注） */
+  function saveSnapshot(label?: string): Snapshot | null {
+    return takeSnapshot('manual', currentData(), label);
+  }
+
+  /**
+   * 恢复数据（版本快照 / 版本文件共用，口径 §19）：
+   * 恢复前对当前数据自动快照（可反悔）→ normalize 整体替换 → 强制推送云端（避免被旧时间戳云端数据拉回）
+   */
+  function restoreData(raw: { plans: unknown; schedules: unknown; lastPlanId?: unknown }): boolean {
+    if (!Array.isArray(raw.plans) || !Array.isArray(raw.schedules) || raw.plans.length === 0) return false;
+    takeSnapshot('pre-restore', currentData());
+    const newPlans = (raw.plans as Array<Record<string, unknown>>)
+      .filter((p) => typeof p?.id === 'string' && p.id)
+      .map((p) => ({
+        id: p.id as string,
+        name: typeof p.name === 'string' && p.name.trim() ? p.name.trim().slice(0, 30) : '未命名行程',
+        createdAt: typeof p.createdAt === 'number' ? p.createdAt : Date.now(),
+        updatedAt: typeof p.updatedAt === 'number' ? p.updatedAt : Date.now(),
+      }));
+    if (!newPlans.length) return false;
+    const fallback = newPlans[0]!.id;
+    const newSchedules = (raw.schedules as Array<Record<string, unknown>>).map((s) =>
+      normalizeSchedule(
+        s,
+        typeof s.planId === 'string' && newPlans.some((p) => p.id === s.planId) ? s.planId : fallback,
+      ),
+    );
+    plans.value = newPlans;
+    schedules.value = newSchedules;
+    const last = typeof raw.lastPlanId === 'string' && newPlans.some((p) => p.id === raw.lastPlanId)
+      ? raw.lastPlanId
+      : newPlans[0]!.id;
+    currentPlanId.value = last;
+    jumpToFirstPlacedWeek();
+    persist();
+    void syncNow('manual', { forcePush: true }); // 恢复后以本地版本覆盖云端
+    return true;
+  }
+
+  function restoreSnapshotById(id: string): boolean {
+    const snap = listSnapshots().find((s) => s.id === id);
+    if (!snap) return false;
+    return restoreData(snap.data);
+  }
+
   /** 重置为示例数据（清空本地全部修改） */
   async function resetToSeed(): Promise<void> {
+    takeSnapshot('pre-reset', currentData());
     const data = buildSeedData();
     plans.value = data.plans;
     schedules.value = data.schedules;
@@ -602,6 +662,10 @@ export const usePlannerStore = defineStore('planner', () => {
     deleteSchedule,
     restoreSchedule,
     purgeSchedule,
+    // 版本管理（口径 §19）
+    saveSnapshot,
+    restoreData,
+    restoreSnapshotById,
     // 勾选与已付
     setConfirmed,
     setPaidAmount,

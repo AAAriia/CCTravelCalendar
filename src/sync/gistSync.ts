@@ -1,6 +1,7 @@
 import { reactive } from 'vue';
 import type { AppData } from '@/types';
 import { normalizeSchedule } from '@/data/normalize';
+import { takeSnapshot } from '@/data/snapshots';
 import { usePlannerStore } from '@/stores/planner';
 import { toast } from '@/composables/useToast';
 
@@ -131,9 +132,15 @@ function toPayload(data: AppData): RemotePayload {
   return { app: 'travel-planner', version: data.version, plans: data.plans, schedules: data.schedules, lastPlanId: data.lastPlanId, exportedAt: Date.now() };
 }
 
-/** 应用远端数据到本地 store（normalize 防脏） */
+/** 应用远端数据到本地 store（normalize 防脏）；覆盖前自动快照（口径 §19） */
 function applyRemote(remote: RemotePayload): void {
   const store = usePlannerStore();
+  takeSnapshot('pre-sync-pull', {
+    version: 3,
+    plans: store.plans,
+    schedules: store.schedules,
+    lastPlanId: store.currentPlanId,
+  });
   applyingRemote = true;
   try {
     const plans = remote.plans.map((p) => ({ ...p }));
@@ -155,8 +162,11 @@ function applyRemote(remote: RemotePayload): void {
   }
 }
 
-/** 完整同步：拉取比对 + 按需推送（last-write-wins） */
-export async function syncNow(reason = 'manual'): Promise<'pushed' | 'pulled' | 'skip' | 'disabled'> {
+/** 完整同步：拉取比对 + 按需推送（last-write-wins）；forcePush 跳过比对直接覆盖云端（版本恢复后使用） */
+export async function syncNow(
+  reason = 'manual',
+  opts: { forcePush?: boolean } = {},
+): Promise<'pushed' | 'pulled' | 'skip' | 'disabled'> {
   const cfg = loadSyncConfig();
   applyCfg(cfg);
   if (!cfg || !cfg.enabled) return 'disabled';
@@ -179,10 +189,10 @@ export async function syncNow(reason = 'manual'): Promise<'pushed' | 'pulled' | 
       markSynced();
       return 'pushed';
     }
-    const remote = await readGist(cfg.token, gistId);
+    const remote = opts.forcePush ? null : await readGist(cfg.token, gistId); // 强推模式跳过拉取比对
     const localMtime = localMaxUpdated(local);
     const remoteMtime = remote ? Math.max(remote.exportedAt, localMaxUpdated(remote)) : 0;
-    if (remote && remoteMtime > localMtime) {
+    if (!opts.forcePush && remote && remoteMtime > localMtime) {
       applyRemote(remote);
       syncState.status = 'ok';
       markSynced();

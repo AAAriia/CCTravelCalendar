@@ -57,6 +57,7 @@ import { usePlannerStore } from '@/stores/planner';
 import { SCHEMA_VERSION } from '@/constants';
 import { applyImport, buildExportBundle, buildPlanCsv, downloadFile, type ImportReport } from '@/utils/transfer';
 import { toast } from '@/composables/useToast';
+import { takeSnapshot } from '@/data/snapshots';
 
 defineProps<{ visible: boolean }>();
 const emit = defineEmits<{ close: [] }>();
@@ -109,6 +110,7 @@ function doImport(): void {
     schedules: store.schedules,
     lastPlanId: store.currentPlanId,
   };
+  takeSnapshot('pre-import', JSON.parse(JSON.stringify(data)) as typeof data); // 导入前快照（口径 §19）
   const result = applyImport(pendingText.value, data, mode.value);
   if (!result.ok) {
     error.value = result.error ?? '导入失败';
