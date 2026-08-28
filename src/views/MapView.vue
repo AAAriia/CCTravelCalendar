@@ -48,11 +48,11 @@
           <div class="dl-main">
             <div class="dl-t">{{ s.title }}</div>
             <div class="dl-sub">
-              {{ s.startTime }} · {{ s.location || '未填写地点' }}
+              {{ s.startTime }} · {{ s.address || s.location || '未填写地点' }}
               <template v-if="s.price != null"> · {{ fmtPriceRange(s.price, s.varianceUp, s.varianceDown) }}</template>
             </div>
           </div>
-          <span v-if="coords[s.id]" class="dl-ok">✓</span>
+          <span v-if="coords[s.id]" class="dl-ok" :title="s.lat != null ? '地址选点（精确）' : '地点文本定位（推测）'">{{ s.lat != null ? '◎' : '✓' }}</span>
           <span v-else class="dl-warn" :title="'未定位：' + (s.location || '无地点')">{{ loading ? '…' : '⚠' }}</span>
           <button class="btn sm" @click.stop="openDetail(s.id)">详情</button>
         </div>
@@ -201,7 +201,7 @@ function renderMarkers(): void {
       .addTo(map!)
       .bindPopup(
         `<b>${i + 1}. ${escapeHtml(s.title)}</b><br>${s.startTime} - ${endHH(s)}<br>` +
-          `${escapeHtml(s.location)}${s.price != null ? `<br>${fmtPriceRange(s.price, s.varianceUp, s.varianceDown)}` : ''}`,
+          `${escapeHtml(s.address || s.location)}${s.price != null ? `<br>${fmtPriceRange(s.price, s.varianceUp, s.varianceDown)}` : ''}`,
       );
     markers.set(s.id, marker);
   });
@@ -231,13 +231,19 @@ function focusMarker(s: Schedule): void {
 
 /* ---------------- 地理编码 ---------------- */
 async function resolveAll(force = false): Promise<void> {
-  const targets = force ? unresolved.value : dayItems.value.filter((s) => s.location);
-  if (!targets.length) return;
   loading.value = true;
   try {
-    // 逐个串行（geocode 内部已限速）；缓存命中即时
-    for (const s of targets) {
-      const p = await geocode(s.location, force && !!coords[s.id]);
+    for (const s of dayItems.value) {
+      // 优先：地址选点存储的精确坐标（WGS84）
+      if (s.lat != null && s.lon != null) {
+        coords[s.id] = { lat: s.lat, lon: s.lon };
+        renderMarkers();
+        continue;
+      }
+      if (!s.location) continue;
+      // 回退：地点文本地理编码（缓存命中即时；force 重查）
+      if (!force && coords[s.id]) continue;
+      const p = await geocode(s.location, force);
       if (p) coords[s.id] = p;
       renderMarkers();
     }

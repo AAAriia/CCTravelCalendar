@@ -538,3 +538,22 @@ describe('planner store · 刷新默认定位行程周（口径 §4.1b）', () =
     void other;
   });
 });
+
+describe('planner store · 地址选点字段（口径 §20a）', () => {
+  it('创建与编辑可携带 address/lat/lon；清空地址同步清坐标', async () => {
+    const store = await boot();
+    const [s] = store.createSchedule({
+      title: '带地址测试', type: 'sight',
+      address: 'Naha Airport', lat: 26.2085, lon: 127.6845,
+    });
+    expect(s.address).toBe('Naha Airport');
+    expect(s.lat).toBe(26.2085);
+    store.updateSchedule(s.id, {
+      title: s.title, type: s.type, address: '', lat: null, lon: null,
+      date: null, startTime: null, durationMin: 60,
+    });
+    expect(s.address).toBe('');
+    expect(s.lat).toBeNull();
+    expect(s.lon).toBeNull();
+  });
+});

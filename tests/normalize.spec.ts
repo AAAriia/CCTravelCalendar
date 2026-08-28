@@ -64,6 +64,19 @@ describe('normalizeSchedule 脏数据防御', () => {
     expect(normalizeSchedule({}, 'p1').varianceDown).toBeNull();
   });
 
+  it('address/lat/lon：地图选点字段默认与校验', () => {
+    const s = normalizeSchedule({ address: 'Naha Airport · Okinawa', lat: 26.2085, lon: 127.6845 }, 'p1');
+    expect(s.address).toBe('Naha Airport · Okinawa');
+    expect(s.lat).toBe(26.2085);
+    expect(s.lon).toBe(127.6845);
+    const d = normalizeSchedule({}, 'p1');
+    expect(d.address).toBe('');
+    expect(d.lat).toBeNull();
+    expect(d.lon).toBeNull();
+    expect(normalizeSchedule({ address: 'x'.repeat(100) }, 'p1').address.length).toBe(80);
+    expect(normalizeSchedule({ lat: 'abc' as unknown as number }, 'p1').lat).toBeNull();
+  });
+
   it('uid 唯一性', () => {
     const set = new Set(Array.from({ length: 200 }, () => uid()));
     expect(set.size).toBe(200);

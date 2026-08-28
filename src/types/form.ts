@@ -5,6 +5,9 @@ export interface FormPatch {
   title: string;
   type: ScheduleType;
   location: string;
+  address: string;
+  lat: number | null;
+  lon: number | null;
   date: string | null;
   startTime: string | null;
   durationMin: number;

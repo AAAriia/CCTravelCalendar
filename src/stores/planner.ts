@@ -223,6 +223,9 @@ export const usePlannerStore = defineStore('planner', () => {
     title: string;
     type: ScheduleType;
     location?: string;
+    address?: string;
+    lat?: number | null;
+    lon?: number | null;
     date?: string | null;
     startTime?: string | null;
     durationMin?: number;
@@ -256,6 +259,9 @@ export const usePlannerStore = defineStore('planner', () => {
       title: patch.title.trim().slice(0, 30) || '未命名日程',
       type: patch.type,
       location: (patch.location ?? '').trim().slice(0, 30),
+      address: (patch.address ?? '').trim().slice(0, 80),
+      lat: patch.lat ?? null,
+      lon: patch.lon ?? null,
       date: date && startTime ? date : null,
       startTime: date && startTime ? minToHH(startMin) : null,
       durationMin,
@@ -333,6 +339,9 @@ export const usePlannerStore = defineStore('planner', () => {
       title: string;
       type: ScheduleType;
       location?: string;
+      address?: string;
+      lat?: number | null;
+      lon?: number | null;
       date?: string | null;
       startTime?: string | null;
       durationMin?: number;
@@ -357,6 +366,9 @@ export const usePlannerStore = defineStore('planner', () => {
     s.title = patch.title.trim().slice(0, 30) || '未命名日程';
     s.type = patch.type;
     s.location = (patch.location ?? '').trim().slice(0, 30);
+    s.address = (patch.address ?? '').trim().slice(0, 80);
+    s.lat = patch.lat ?? null;
+    s.lon = patch.lon ?? null;
     s.durationMin = patch.durationMin ?? s.durationMin;
     s.expectedDate = patch.expectedDate ?? null;
     s.price = patch.price ?? null;

@@ -15,8 +15,14 @@ export interface Schedule {
   title: string;
   /** 类型，六选一 */
   type: ScheduleType;
-  /** 地点，选填 ≤30 字，空值分组归"未填写地点" */
+  /** 地点（手填标签，展示用），选填 ≤30 字，空值分组归"未填写地点" */
   location: string;
+  /** 地址（地图选点所得，口径 §20a），选填 ≤80 字；与 lat/lon 同时有值或同时为空 */
+  address: string;
+  /** 纬度（地图选点坐标，WGS84）；无地址选点时为 null */
+  lat: number | null;
+  /** 经度（地图选点坐标，WGS84） */
+  lon: number | null;
   /** 实际日期 YYYY-MM-DD；未放置为 null（口径 §3.1：date 与 startTime 同时有值或同时为空） */
   date: string | null;
   /** 开始时间 HH:mm，30 分钟对齐；未放置为 null */

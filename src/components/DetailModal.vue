@@ -42,9 +42,25 @@
             </div>
           </div>
           <div class="f-row">
-            <label>地点</label>
+            <label>地点<span class="hint-inline">手填标签，用于展示与分组</span></label>
             <input v-model.trim="form.location" type="text" maxlength="30" placeholder="如：湖滨码头" />
           </div>
+          <div class="f-row">
+            <label>地址<span class="hint-inline">地图选点，用于精确定位</span></label>
+            <div class="addr-row">
+              <input :value="form.address" type="text" readonly placeholder="未设置（点击右侧按钮在地图选点）" title="{{ form.address }}" />
+              <button type="button" class="btn" @click="pickerOpen = true">🗺 选点</button>
+              <button v-if="form.address" type="button" class="btn ghost-danger" title="清除地址与坐标" @click="clearAddr">×</button>
+            </div>
+            <div v-if="form.address" class="addr-coord">坐标 {{ form.lat?.toFixed(4) }}, {{ form.lon?.toFixed(4) }}</div>
+          </div>
+          <MapPicker
+            v-if="pickerOpen"
+            :init-lat="form.lat ?? undefined"
+            :init-lon="form.lon ?? undefined"
+            @pick="onPicked"
+            @close="pickerOpen = false"
+          />
           <!-- 行分组（口径 §7.2）：日期+预计日期 / 开始时间+时长 / 价格+上浮+下浮 -->
           <div class="f-2col">
             <div class="f-row">
@@ -131,6 +147,9 @@ const form = reactive({
   title: '',
   type: 'sight' as ScheduleType,
   location: '',
+  address: '',
+  lat: null as number | null,
+  lon: null as number | null,
   date: '',
   startTime: '',
   durationMin: 60,
@@ -154,6 +173,9 @@ watch(
       title: s?.title ?? '',
       type: s?.type ?? 'sight',
       location: s?.location ?? '',
+      address: s?.address ?? '',
+      lat: s?.lat ?? null,
+      lon: s?.lon ?? null,
       date: s?.date ?? '',
       startTime: s?.startTime ?? '',
       durationMin: s?.durationMin ?? 60,
@@ -168,6 +190,19 @@ watch(
   },
   { immediate: true },
 );
+
+const pickerOpen = ref(false);
+function onPicked(p: { address: string; lat: number; lon: number }): void {
+  form.address = p.address;
+  form.lat = p.lat;
+  form.lon = p.lon;
+  pickerOpen.value = false;
+}
+function clearAddr(): void {
+  form.address = '';
+  form.lat = null;
+  form.lon = null;
+}
 
 function toggleConfirmed(): void {
   if (!props.schedule) return;
@@ -190,6 +225,9 @@ function save(): void {
     title,
     type: form.type,
     location: form.location,
+    address: form.address,
+    lat: form.lat,
+    lon: form.lon,
     date: form.date || null,
     startTime: form.startTime || null,
     durationMin: form.durationMin,
@@ -203,3 +241,9 @@ function save(): void {
   });
 }
 </script>
+
+<style scoped>
+.addr-row { display: flex; gap: 8px; }
+.addr-row input { flex: 1; background: #f9fafb; }
+.addr-coord { font-size: 11px; color: var(--t4); margin-top: 4px; }
+</style>
