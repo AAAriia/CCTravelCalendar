@@ -47,6 +47,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import L, { type Map as LeafletMap, type Marker } from 'leaflet';
+import { gcj2wgs, wgs2gcj } from '@/utils/geo';
 import 'leaflet/dist/leaflet.css';
 
 const props = defineProps<{ initLat?: number; initLon?: number }>();
@@ -101,7 +102,8 @@ function pickFromSearch(r: { address: string; lat: number; lon: number }): void 
 }
 
 async function onMapClick(e: L.LeafletMouseEvent): Promise<void> {
-  const { lat, lng: lon } = e.latlng;
+  // 高德底图（GCJ-02）取点 → 转 WGS84 再存储/反查（口径 §20；海外无偏移）
+  const [lat, lon] = gcj2wgs(e.latlng.lat, e.latlng.lng);
   picked.value = { address: '', lat, lon };
   placePin(lat, lon);
   try {
@@ -120,11 +122,23 @@ async function onMapClick(e: L.LeafletMouseEvent): Promise<void> {
   }
 }
 
-function placePin(lat: number, lon: number, zoom?: number): void {
+/** 自绘图钉（默认图标经打包后 404） */
+const pinIcon = L.divIcon({
+  className: 'mp-pin-wrap',
+  html: '<span class="mp-pin">📍</span>',
+  iconSize: [28, 28],
+  iconAnchor: [14, 26],
+});
+
+/**
+ * 落点：入参为 WGS84；渲染到高德底图（GCJ-02）前纠偏（仅中国大陆）
+ */
+function placePin(wgsLat: number, wgsLon: number, zoom?: number): void {
   if (!map) return;
   if (pin) pin.remove();
-  pin = L.marker([lat, lon]).addTo(map);
-  map.setView([lat, lon], zoom ?? Math.max(map.getZoom(), 12));
+  const [glat, glon] = wgs2gcj(wgsLat, wgsLon);
+  pin = L.marker([glat, glon], { icon: pinIcon }).addTo(map);
+  map.setView([glat, glon], zoom ?? Math.max(map.getZoom(), 12));
 }
 
 function confirm(): void {
@@ -177,6 +191,11 @@ onBeforeUnmount(() => {
 }
 .pk-addr { font-size: 13px; font-weight: 600; }
 .pk-coord { font-size: 11px; color: var(--t4); margin-top: 2px; }
+
+.mp-pin {
+  display: inline-block; font-size: 26px; line-height: 28px; filter: drop-shadow(0 3px 4px rgba(0,0,0,.35));
+  transform: translate(0, 0); cursor: pointer;
+}
 
 @media (max-width: 767px) {
   .picker-modal { width: 100%; }
