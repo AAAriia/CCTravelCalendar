@@ -155,7 +155,7 @@ describe('PlannerView 集成交互（jsdom 指针事件模拟）', () => {
     expect(wrapper.text()).toContain('未填写地点');
     await tabs[2].trigger('click'); // 按预计日期
     expect(store.groupBy).toBe('expectedDate');
-    expect(wrapper.text()).toContain('未设定');
+    expect(wrapper.text()).toContain('9/30'); // 已放置 expectedDate≡date（口径 §5 v2）
     await tabs[0].trigger('click');
     expect(store.groupBy).toBe('type');
   });

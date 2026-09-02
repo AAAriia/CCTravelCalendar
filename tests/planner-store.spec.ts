@@ -112,7 +112,7 @@ describe('planner store · 状态机 E1–E8（口径文档 §3.2）', () => {
   it('E6 取消：日期时间置空 + 预计日期回写为上次实际日期（口径 §5）', async () => {
     const store = await boot();
     const flight = findByTitle(store, '宫古往返'); // D4 周五 09:00
-    expect(flight.expectedDate).toBeNull();
+    expect(flight.expectedDate).toBe(SD.d4); // 已放置 ⇒ 预计日期 ≡ 日期（口径 §5 v2）
     const lastDate = store.cancelSchedule(flight.id);
     expect(lastDate).toBe(SD.d4);
     expect(flight.date).toBeNull();
@@ -146,7 +146,7 @@ describe('planner store · 状态机 E1–E8（口径文档 §3.2）', () => {
     expect(updated!.startTime).toBe('14:20'); // 5 分钟对齐保留
   });
 
-  it('E8 编辑：清空日期 → 未放置且预计日期不回写（区别于 E6）', async () => {
+  it('E8 编辑：清空日期 → 预计日期回写清空前日期（口径 §5 v2，与 E6 一致）', async () => {
     const store = await boot();
     const dive = findByTitle(store, '浮潜'); // D2 09:00
     const [, warn] = store.updateSchedule(dive.id, {
@@ -154,7 +154,7 @@ describe('planner store · 状态机 E1–E8（口径文档 §3.2）', () => {
     });
     expect(warn).toBeNull();
     expect(dive.date).toBeNull();
-    expect(dive.expectedDate).toBeNull(); // 不回写
+    expect(dive.expectedDate).toBe(SD.d2); // 撤下 ⇒ 回写撤下前日期
   });
 
   it('E8 编辑只填时间 → 两者置空 + 警告', async () => {
@@ -222,10 +222,11 @@ describe('planner store · 日程库分组口径（口径文档 §6）', () => {
     const store = await boot();
     store.setGroupBy('expectedDate');
     const names = store.groups.map((g) => g.name);
-    expect(names[names.length - 1]).toBe('未设定');
-    // 种子：北部交通 expectedDate=D3 一个日期组 + 未设定（8 条）
-    expect(names).toHaveLength(2);
-    expect(store.groups.find((g) => g.name === '未设定')!.items).toHaveLength(8);
+    // 口径 §5 v2：已放置日程 expectedDate ≡ date → 种子 5 个日期组（9/30×4、10/1、10/2、10/3、10/4×2）
+    expect(names).toHaveLength(5);
+    expect(names[0]).toContain('9/30');
+    expect(names[names.length - 1]).toContain('10/4');
+    expect(store.groups.find((g) => g.name === '未设定')).toBeUndefined();
   });
 
   it('取消后日程出现在预计日期 = 上次实际日期的分组（回写独立验证）', async () => {
@@ -555,5 +556,32 @@ describe('planner store · 地址选点字段（口径 §20a）', () => {
     expect(s.address).toBe('');
     expect(s.lat).toBeNull();
     expect(s.lon).toBeNull();
+  });
+});
+
+describe('一次性数据整理：已放置 expectedDate 对齐（口径 §5 v2）', () => {
+  it('旧数据（已放置 expectedDate 为空/旧值）首次加载即对齐，且只执行一次', async () => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    const store = usePlannerStore();
+    await store.init();
+    // 手工构造旧口径数据：放置但不带 expectedDate，清标记后重载
+    const [s] = store.createSchedule({ title: '旧数据A', type: 'food', date: '2026-10-02', startTime: '12:00' });
+    s.expectedDate = null; s.updatedAt = 1000;
+    store.persist();
+    localStorage.removeItem('tp_migrated_exp_v1');
+    setActivePinia(createPinia());
+    const store2 = usePlannerStore();
+    await store2.init();
+    const a = store2.schedules.find((x) => x.title === '旧数据A')!;
+    expect(a.expectedDate).toBe('2026-10-02'); // 对齐为 date
+    // 再改坏一次：标记已存在 → 不再整理
+    a.expectedDate = null;
+    store2.persist();
+    setActivePinia(createPinia());
+    const store3 = usePlannerStore();
+    await store3.init();
+    const b = store3.schedules.find((x) => x.title === '旧数据A')!;
+    expect(b.expectedDate).toBeNull(); // 未再次整理（仅一次性）
   });
 });

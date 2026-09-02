@@ -74,7 +74,28 @@ export const usePlannerStore = defineStore('planner', () => {
     currentPlanId.value = data.lastPlanId ?? data.plans[0]!.id;
     nightCollapsedUi.value = data.uiState?.nightCollapsed !== false; // 默认折叠
     jumpToFirstPlacedWeek(); // 打开/刷新：默认定位当前行程首个日程所在周（口径 §4.1b）
+    migrateExpectedDate(); // 一次性整理：旧数据已放置日程 expectedDate 对齐为 date（口径 §5 v2）
     loaded.value = true;
+  }
+
+  /** 一次性数据整理（口径 §5 v2）：已放置 ⇒ expectedDate ≡ date；执行一次即记标记，结果随 persist 推送云端 */
+  function migrateExpectedDate(): void {
+    const FLAG = 'tp_migrated_exp_v1';
+    try {
+      if (localStorage.getItem(FLAG)) return;
+      localStorage.setItem(FLAG, '1');
+    } catch {
+      return; // 存储不可用则跳过（不影响加载）
+    }
+    let changed = false;
+    for (const s of schedules.value) {
+      if (s.deletedAt === null && s.date !== null && s.expectedDate !== s.date) {
+        s.expectedDate = s.date;
+        touch(s);
+        changed = true;
+      }
+    }
+    if (changed) persist(); // 本地写入 + 云同步自动推送
   }
 
   /** 定位到当前行程最早已放置日程所在周（口径 §4.1b：刷新/切换行程的默认定位；无已放置回退今天所在周） */
@@ -279,6 +300,7 @@ export const usePlannerStore = defineStore('planner', () => {
       updatedAt: now,
     };
     schedules.value.push(s);
+    if (s.date) s.expectedDate = s.date; // E2：已放置 ⇒ 预计日期 ≡ 日期（口径 §5 v2）
     autoConfirmIfSolo(s); // E2：直接上表且时段无重叠 → 自动勾选（口径 §14）
     persist();
     return [s, warn];
@@ -291,6 +313,7 @@ export const usePlannerStore = defineStore('planner', () => {
     const clamped = clampStart(startMin, s.durationMin); // 日末截断：保持时长
     s.date = date;
     s.startTime = minToHH(clamped);
+    s.expectedDate = date; // 已放置 ⇒ 预计日期 ≡ 日期（口径 §5 v2）
     autoConfirmIfSolo(s); // 放到无重叠时段 → 自动勾选（口径 §14）
     touch(s);
     persist();
@@ -381,8 +404,10 @@ export const usePlannerStore = defineStore('planner', () => {
       s.date = date;
       s.startTime = minToHH(c.startMin);
       s.durationMin = c.durMin;
+      s.expectedDate = date; // E7：已放置 ⇒ 预计日期 ≡ 日期（口径 §5 v2）
       autoConfirmIfSolo(s); // E7 未放置 → 已放置且无重叠 → 自动勾选
     } else {
+      if (s.date) s.expectedDate = s.date; // E8：撤下 ⇒ 预计日期 = 撤下前日期（口径 §5 v2）
       s.date = null;
       s.startTime = null;
       s.confirmed = false; // E8 回库 → 取消勾选
